@@ -14,6 +14,16 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { ForcePasswordChangePage } from './pages/ForcePasswordChangePage'
 
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+      <p className="text-gray-600">Loading...</p>
+    </div>
+  </div>
+)
+
 // Route loaders for data prefetching
 const dashboardLoader = async () => {
   console.log('[App] dashboardLoader START')
@@ -90,6 +100,7 @@ const router = createBrowserRouter([
         <Layout />
       </ProtectedRoute>
     ),
+    hydrateFallbackElement: <LoadingFallback />,
     children: [
       {
         index: true,
@@ -103,6 +114,7 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
         loader: dashboardLoader,
+        hydrateFallbackElement: <LoadingFallback />,
       },
       {
         path: 'admin/dashboard',
@@ -111,6 +123,7 @@ const router = createBrowserRouter([
             <AdminDashboard />
           </ProtectedRoute>
         ),
+        hydrateFallbackElement: <LoadingFallback />,
       },
       {
         path: 'admin/users',
@@ -120,6 +133,7 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
         loader: adminUsersLoader,
+        hydrateFallbackElement: <LoadingFallback />,
       },
       {
         path: 'profile',
@@ -128,6 +142,7 @@ const router = createBrowserRouter([
             <ProfilePage />
           </ProtectedRoute>
         ),
+        hydrateFallbackElement: <LoadingFallback />,
       },
       {
         path: 'reports',
@@ -139,6 +154,7 @@ const router = createBrowserRouter([
             </div>
           </ProtectedRoute>
         ),
+        hydrateFallbackElement: <LoadingFallback />,
       },
       {
         path: 'transactions',
@@ -150,6 +166,7 @@ const router = createBrowserRouter([
             </div>
           </ProtectedRoute>
         ),
+        hydrateFallbackElement: <LoadingFallback />,
       },
       {
         path: 'analytics',
@@ -161,6 +178,7 @@ const router = createBrowserRouter([
             </div>
           </ProtectedRoute>
         ),
+        hydrateFallbackElement: <LoadingFallback />,
       },
       {
         path: 'settings',
@@ -170,6 +188,7 @@ const router = createBrowserRouter([
             <p className="text-gray-600 mt-2">Coming soon...</p>
           </div>
         ),
+        hydrateFallbackElement: <LoadingFallback />,
       },
     ],
   },
@@ -177,7 +196,11 @@ const router = createBrowserRouter([
     path: '*',
     element: <Navigate to="/dashboard" replace />,
   },
-])
+], {
+  future: {
+    v7_partialHydration: true,
+  },
+})
 
 function App() {
   return (
