@@ -1,16 +1,20 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { LogOut, User, Shield } from 'lucide-react'
 
 export function Navbar() {
   const { user, signOut } = useAuth()
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
   const handleSignOut = async () => {
+    setIsSigningOut(true)
     try {
       await signOut()
     } catch (error) {
       console.error('Sign out error:', error)
+    } finally {
+      setIsSigningOut(false)
     }
   }
 
@@ -45,10 +49,20 @@ export function Navbar() {
             
             <button
               onClick={handleSignOut}
+              disabled={isSigningOut}
               className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 hover:text-gray-700 focus:outline-none transition-colors duration-200"
             >
-              <LogOut className="h-4 w-4 mr-1" />
-              Sign out
+              {isSigningOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400 mr-1"></div>
+                  Signing out...
+                </>
+              ) : (
+                <>
+                  <LogOut className="h-4 w-4 mr-1" />
+                  Sign out
+                </>
+              )}
             </button>
           </div>
         </div>

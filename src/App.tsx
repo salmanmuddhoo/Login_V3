@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { queryClient, queryKeys } from './lib/queryClient'
 import { dashboardApi, adminUsersApi, rolesApi } from './lib/dataFetching'
@@ -6,16 +6,27 @@ import { AuthProvider } from './contexts/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
 import { LoginForm } from './components/LoginForm'
-import { Dashboard } from './pages/Dashboard'
-import { AdminDashboard } from './pages/AdminDashboard'
-import { AdminUsers } from './pages/AdminUsers'
-import { ProfilePage } from './pages/ProfilePage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { ForcePasswordChangePage } from './pages/ForcePasswordChangePage'
 
+// Lazy load page components for better performance
+const Dashboard = React.lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })))
+const AdminUsers = React.lazy(() => import('./pages/AdminUsers').then(module => ({ default: module.AdminUsers })))
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage })))
+
 // Loading fallback component
-const LoadingFallback = () => (
+const PageLoadingFallback = () => (
+  <div className="flex items-center justify-center py-12">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-2"></div>
+      <p className="text-gray-600 text-sm">Loading page...</p>
+    </div>
+  </div>
+)
+
+const AppLoadingFallback = () => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center">
     <div className="text-center">
       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
@@ -100,7 +111,7 @@ const router = createBrowserRouter([
         <Layout />
       </ProtectedRoute>
     ),
-    hydrateFallbackElement: <LoadingFallback />,
+    hydrateFallbackElement: <AppLoadingFallback />,
     children: [
       {
         index: true,
@@ -110,85 +121,101 @@ const router = createBrowserRouter([
         path: 'dashboard',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'dashboard', action: 'access' }}>
-            <Dashboard />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Dashboard />
+            </Suspense>
           </ProtectedRoute>
         ),
         loader: dashboardLoader,
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'admin/dashboard',
         element: (
           <ProtectedRoute requireAdmin>
-            <AdminDashboard />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminDashboard />
+            </Suspense>
           </ProtectedRoute>
         ),
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'admin/users',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'users', action: 'read' }}>
-            <AdminUsers />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminUsers />
+            </Suspense>
           </ProtectedRoute>
         ),
         loader: adminUsersLoader,
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'profile',
         element: (
           <ProtectedRoute>
-            <ProfilePage />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <ProfilePage />
+            </Suspense>
           </ProtectedRoute>
         ),
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'reports',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'reports', action: 'view' }}>
-            <div className="text-center py-12">
-              <h2 className="text-xl font-semibold text-gray-900">Reports</h2>
-              <p className="text-gray-600 mt-2">Coming soon...</p>
-            </div>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-900">Reports</h2>
+                <p className="text-gray-600 mt-2">Coming soon...</p>
+              </div>
+            </Suspense>
           </ProtectedRoute>
         ),
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'transactions',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'transactions', action: 'create' }}>
-            <div className="text-center py-12">
-              <h2 className="text-xl font-semibold text-gray-900">Transactions</h2>
-              <p className="text-gray-600 mt-2">Coming soon...</p>
-            </div>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-900">Transactions</h2>
+                <p className="text-gray-600 mt-2">Coming soon...</p>
+              </div>
+            </Suspense>
           </ProtectedRoute>
         ),
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'analytics',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'reports', action: 'view' }}>
-            <div className="text-center py-12">
-              <h2 className="text-xl font-semibold text-gray-900">Analytics</h2>
-              <p className="text-gray-600 mt-2">Coming soon...</p>
-            </div>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-900">Analytics</h2>
+                <p className="text-gray-600 mt-2">Coming soon...</p>
+              </div>
+            </Suspense>
           </ProtectedRoute>
         ),
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'settings',
         element: (
-          <div className="text-center py-12">
-            <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
-            <p className="text-gray-600 mt-2">Coming soon...</p>
-          </div>
+          <Suspense fallback={<PageLoadingFallback />}>
+            <div className="text-center py-12">
+              <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+              <p className="text-gray-600 mt-2">Coming soon...</p>
+            </div>
+          </Suspense>
         ),
-        hydrateFallbackElement: <LoadingFallback />,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
     ],
   },

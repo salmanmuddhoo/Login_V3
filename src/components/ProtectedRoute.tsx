@@ -21,7 +21,9 @@ export function ProtectedRoute({
 
   console.log('[ProtectedRoute] Render - pathname:', location.pathname, 'user:', !!user, 'loading:', loading)
 
-  if (loading) {
+  // Only show loading spinner if we don't have a user AND we're still loading
+  // This prevents unnecessary loading screens when user is cached
+  if (loading && !user) {
     console.log('[ProtectedRoute] Showing loading spinner')
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">

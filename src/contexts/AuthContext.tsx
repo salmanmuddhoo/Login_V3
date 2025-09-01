@@ -86,6 +86,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<any | null>(cachedUser)
   const [loading, setLoading] = useState(!cachedUser) // Don't show loading if we have cached data
   const [error, setError] = useState<string | null>(null)
+  const [isInitialized, setIsInitialized] = useState(!!cachedUser) // Track if auth is initialized
 
   /**
    * Fetches extra profile data from your custom `users` table
@@ -169,6 +170,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           console.log('[AuthContext] init - Setting loading to false')
           setLoading(false)
         }
+        setIsInitialized(true)
       }
     }
 
@@ -201,11 +203,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (loading) {
           setLoading(false)
         }
+        setIsInitialized(true)
       } catch (err) {
         console.error('[AuthContext] Auth state change - ERROR:', err)
         // Don't immediately clear user on auth state change errors
         // This prevents automatic logout when profile fetch fails
         setError('Failed to load user profile. Some features may not work correctly.')
+        setIsInitialized(true)
       }
     })
 
@@ -266,20 +270,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
    */
   const signOut = async () => {
     console.log('[AuthContext] signOut START')
-    setLoading(true)
+    
+    // Immediately clear user state and cache for instant UI feedback
+    setUser(null)
+    setCachedUser(null)
+    setError(null)
+    console.log('[AuthContext] signOut - User state cleared immediately')
     
     try {
       console.log('[AuthContext] signOut - Calling Supabase auth signOut...')
+      // Perform actual signout in background
       await supabase.auth.signOut()
-      setUser(null)
-      setCachedUser(null)
       console.log('[AuthContext] signOut SUCCESS')
     } catch (err: any) {
       console.error('[AuthContext] signOut ERROR:', err)
-      setError(err.message)
-    } finally {
-      console.log('[AuthContext] signOut - Setting loading to false')
-      setLoading(false)
+      // Don't show error for signout failures - user is already logged out from UI perspective
     }
   }
 
@@ -390,7 +395,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   console.log('[AuthContext] Render - user:', !!user, 'loading:', loading, 'error:', error)
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, signIn, signOut, refreshUser, changePassword, sendPasswordResetEmail }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading: loading && !isInitialized, // Only show loading if not initialized
+      error, 
+      signIn, 
+      signOut, 
+      refreshUser, 
+      changePassword, 
+      sendPasswordResetEmail 
+    }}>
       {children}
     </AuthContext.Provider>
   )

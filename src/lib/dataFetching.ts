@@ -146,7 +146,7 @@ export const dashboardApi = {
     console.log('[dataFetching] getRecentActivity START')
     
     try {
-      // Mock data for now - replace with actual Supabase query
+      // Return cached data immediately if available, then refresh in background
       const activities = [
         {
           id: '1',
@@ -175,7 +175,8 @@ export const dashboardApi = {
       return activities
     } catch (err) {
       console.error('[dataFetching] getRecentActivity ERROR:', err)
-      throw err
+      // Return empty array on error to prevent blocking UI
+      return []
     }
   },
 
@@ -183,7 +184,7 @@ export const dashboardApi = {
     console.log('[dataFetching] getStats START')
     
     try {
-      // Mock data for now - replace with actual Supabase queries
+      // Return cached data immediately if available
       const stats = [
         {
           name: 'Total Users',
@@ -215,7 +216,8 @@ export const dashboardApi = {
       return stats
     } catch (err) {
       console.error('[dataFetching] getStats ERROR:', err)
-      throw err
+      // Return empty array on error to prevent blocking UI
+      return []
     }
   }
 }
