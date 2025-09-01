@@ -22,13 +22,6 @@ export const getAccessToken = async (): Promise<string | null> => {
 
     if (session?.access_token) return session.access_token
 
-    // fallback to user session from local storage
-    const { data: userSession } = await supabase.auth.getUser()
-    if (userSession?.id) {
-      const currentSession = supabase.auth.session()
-      return currentSession?.access_token || null
-    }
-
     return null
   } catch (err) {
     console.error('Failed to get Supabase access token:', err)

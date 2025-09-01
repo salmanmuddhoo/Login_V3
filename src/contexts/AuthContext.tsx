@@ -62,6 +62,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (sessionError) {
           console.error('[AuthContext] init - Session error:', sessionError)
           setUser(null)
+          // Clear any invalid tokens
+          await supabase.auth.signOut()
           return
         }
         
@@ -78,6 +80,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         } else {
           console.log('[AuthContext] init - No session found')
           setUser(null)
+          // Ensure clean state if no session
+          await supabase.auth.signOut()
         }
       } catch (err) {
         if (err instanceof Error && err.message.includes('timed out')) {
@@ -87,6 +91,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         } else {
           console.error('[AuthContext] init - CATCH ERROR:', err)
           setUser(null)
+          // Clear any invalid tokens on error
+          await supabase.auth.signOut()
         }
       } finally {
         console.log('[AuthContext] init - Setting loading to false')
