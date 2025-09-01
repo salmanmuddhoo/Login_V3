@@ -21,8 +21,7 @@ export function ProtectedRoute({
 
   console.log('[ProtectedRoute] Render - pathname:', location.pathname, 'user:', !!user, 'loading:', loading)
 
-  // Only show loading spinner if we don't have a user AND we're still loading
-  // This prevents unnecessary loading screens when user is cached
+  // Only show loading spinner if we're actually loading (no cached data available)
   if (loading && !user) {
     console.log('[ProtectedRoute] Showing loading spinner')
     return (

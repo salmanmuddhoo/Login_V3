@@ -84,9 +84,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Initialize user from cache if available
   const cachedUser = getCachedUser()
   const [user, setUser] = useState<any | null>(cachedUser)
-  const [loading, setLoading] = useState(!cachedUser) // Don't show loading if we have cached data
+  const [loading, setLoading] = useState(false) // Start with false for instant UI
   const [error, setError] = useState<string | null>(null)
-  const [isInitialized, setIsInitialized] = useState(!!cachedUser) // Track if auth is initialized
+  const [isInitialized, setIsInitialized] = useState(!!cachedUser) // Immediately initialized if cached
 
   /**
    * Fetches extra profile data from your custom `users` table
@@ -113,7 +113,73 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     console.log('[AuthContext] useEffect INIT START')
     
+    // If we have cached user data, immediately initialize and start background refresh
+    if (cachedUser) {
+      console.log('[AuthContext] Using cached user for immediate initialization:', cachedUser)
+      setUser(cachedUser)
+      setLoading(false)
+      setIsInitialized(true)
+      
+      // Start background refresh to ensure data is current
+      const backgroundRefresh = async () => {
+        try {
+          console.log('[AuthContext] Starting background refresh for cached user')
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+          
+          if (sessionError || !session?.user) {
+            console.log('[AuthContext] Background refresh - No valid session, clearing cache')
+            setUser(null)
+            setCachedUser(null)
+            await supabase.auth.signOut()
+            return
+          }
+          
+          // Fetch fresh profile data in background
+          const freshProfile = await withTimeout(
+            fetchUserProfile(session.user.id),
+            15000, // 15 seconds for background refresh
+            'Background profile refresh timed out'
+          )
+          
+          // Check if user account is still active
+          if (!freshProfile?.is_active) {
+            console.log('[AuthContext] Background refresh - User account is inactive, signing out')
+            setUser(null)
+            setCachedUser(null)
+            await supabase.auth.signOut()
+            return
+          }
+          
+          // Only update if data has changed
+          if (JSON.stringify(freshProfile) !== JSON.stringify(cachedUser)) {
+            console.log('[AuthContext] Background refresh - Data changed, updating user')
+            setUser(freshProfile)
+            setCachedUser(freshProfile)
+          } else {
+            console.log('[AuthContext] Background refresh - No changes detected')
+          }
+          
+          // Clear any previous errors
+          setError(null)
+        } catch (err) {
+          console.error('[AuthContext] Background refresh failed:', err)
+          // Don't clear user on background refresh failure - just show warning
+          if (err instanceof Error && err.message.includes('timed out')) {
+            setError('Profile data may be outdated. Please refresh if needed.')
+          } else {
+            setError('Unable to refresh profile data. Some features may not work correctly.')
+          }
+        }
+      }
+      
+      // Start background refresh after a short delay to not block initial render
+      setTimeout(backgroundRefresh, 100)
+      return
+    }
+    
+    // No cached data - proceed with full initialization
     const init = async () => {
+      setLoading(true)
       try {
         console.log('[AuthContext] init - Getting session...')
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -128,18 +194,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         if (session?.user) {
           console.log('[AuthContext] init - Session found, fetching profile for user:', session.user.id)
-          // Use a more reasonable timeout for initial load
           const profile = await withTimeout(
             fetchUserProfile(session.user.id),
             10000, // 10 seconds for initial load
             'Initial profile fetch timed out'
           )
           
-          // Only update state if profile is different from cached version
-          if (!cachedUser || JSON.stringify(profile) !== JSON.stringify(cachedUser)) {
-            setUser(profile)
-            setCachedUser(profile)
+          // Check if user account is active
+          if (!profile?.is_active) {
+            console.log('[AuthContext] init - User account is inactive')
+            setUser(null)
+            setCachedUser(null)
+            await supabase.auth.signOut()
+            return
           }
+          
+          setUser(profile)
+          setCachedUser(profile)
           console.log('[AuthContext] init - Profile set:', profile)
         } else {
           console.log('[AuthContext] init - No session found')
@@ -151,12 +222,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } catch (err) {
         if (err instanceof Error && err.message.includes('timed out')) {
           console.error('[AuthContext] init - TIMEOUT ERROR:', err.message)
-          // If we have cached data, use it and show a warning
-          if (cachedUser) {
-            setError('Using cached profile data. Some information may be outdated.')
-          } else {
-            setError('Loading user profile is taking longer than expected. Please refresh if needed.')
-          }
+          setError('Loading user profile is taking longer than expected. Please refresh if needed.')
         } else {
           console.error('[AuthContext] init - CATCH ERROR:', err)
           setUser(null)
@@ -165,11 +231,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           await supabase.auth.signOut()
         }
       } finally {
-        // Only set loading to false if we don't have cached data
-        if (!cachedUser) {
-          console.log('[AuthContext] init - Setting loading to false')
-          setLoading(false)
-        }
+        console.log('[AuthContext] init - Setting loading to false')
+        setLoading(false)
         setIsInitialized(true)
       }
     }
@@ -184,12 +247,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       try {
         if (session?.user) {
           console.log('[AuthContext] Auth state change - Fetching profile for user:', session.user.id)
-          // For auth state changes, use a generous timeout to prevent automatic logout
           const profile = await withTimeout(
             fetchUserProfile(session.user.id),
-            45000, // 45 seconds for auth state changes
+            20000, // 20 seconds for auth state changes
             'Profile fetch timed out during auth state change'
           )
+          
+          // Check if user account is active
+          if (!profile?.is_active) {
+            console.log('[AuthContext] Auth state change - User account is inactive, signing out')
+            setUser(null)
+            setCachedUser(null)
+            await supabase.auth.signOut()
+            return
+          }
+          
           setUser(profile)
           setCachedUser(profile)
           console.log('[AuthContext] Auth state change - Profile set:', profile)
@@ -206,9 +278,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setIsInitialized(true)
       } catch (err) {
         console.error('[AuthContext] Auth state change - ERROR:', err)
-        // Don't immediately clear user on auth state change errors
-        // This prevents automatic logout when profile fetch fails
-        setError('Failed to load user profile. Some features may not work correctly.')
+        // For auth state changes, be more graceful with errors
+        if (err instanceof Error && err.message.includes('timed out')) {
+          setError('Profile refresh timed out. Using existing session data.')
+        } else {
+          setError('Failed to refresh user profile. Some features may not work correctly.')
+        }
         setIsInitialized(true)
       }
     })
@@ -248,6 +323,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         // prevent inactive accounts from signing in
         if (!profile?.is_active) {
           console.error('[AuthContext] signIn - Account is inactive')
+          await supabase.auth.signOut()
           throw new Error('Account is inactive')
         }
 
@@ -326,6 +402,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const refreshUser = async () => {
     console.log('[AuthContext] refreshUser START')
     
+    if (!user) {
+      console.log('[AuthContext] refreshUser - No user to refresh')
+      return
+    }
+    
     try {
       console.log('[AuthContext] refreshUser - Getting current user...')
       const { data: { user: sessionUser }, error } = await supabase.auth.getUser()
@@ -337,27 +418,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       if (sessionUser) {
         console.log('[AuthContext] refreshUser - Fetching fresh profile...')
-        // For manual refresh, use a reasonable timeout but don't clear user on failure
         try {
           const profile = await withTimeout(
             fetchUserProfile(sessionUser.id),
-            20000, // 20 seconds for manual refresh
+            15000, // 15 seconds for manual refresh
             'Profile refresh timed out'
           )
+          
+          // Check if user account is still active
+          if (!profile?.is_active) {
+            console.log('[AuthContext] refreshUser - User account is inactive, signing out')
+            setUser(null)
+            setCachedUser(null)
+            await supabase.auth.signOut()
+            return
+          }
+          
           setUser(profile)
           setCachedUser(profile)
           console.log('[AuthContext] refreshUser SUCCESS - profile updated:', profile)
         } catch (timeoutErr) {
           console.error('[AuthContext] refreshUser - TIMEOUT during refresh:', timeoutErr)
-          setError('Profile refresh timed out. Current session maintained.')
-          // Don't clear the user - keep existing session
+          setError('Profile refresh timed out. Using existing data.')
         }
       } else {
         console.log('[AuthContext] refreshUser - No session user found')
+        setUser(null)
+        setCachedUser(null)
       }
     } catch (err) {
       console.error('[AuthContext] refreshUser ERROR:', err)
-      setError('Failed to refresh user profile. Current session maintained.')
+      setError('Failed to refresh user profile. Using existing data.')
     }
   }
 
@@ -397,7 +488,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   return (
     <AuthContext.Provider value={{ 
       user, 
-      loading: loading && !isInitialized, // Only show loading if not initialized
+      loading: loading && !isInitialized, // Only show loading if not initialized and no cached data
       error, 
       signIn, 
       signOut, 

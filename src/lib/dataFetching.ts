@@ -26,7 +26,7 @@ export const userProfileApi = {
     console.log('[dataFetching] fetchUserProfile START - userId:', userId)
     
     try {
-      // Optimized query with proper joins and minimal data selection
+      // Optimized query with proper joins for complete user data
       const { data, error } = await supabase
         .from('users')
         .select(`
@@ -38,6 +38,8 @@ export const userProfileApi = {
           menu_access,
           sub_menu_access,
           component_access,
+          created_at,
+          updated_at,
           user_roles(
             roles!inner(
               id, 
@@ -55,8 +57,7 @@ export const userProfileApi = {
           )
         `)
         .eq('id', userId)
-        .limit(1)
-        .maybeSingle()
+        .single()
 
       if (error) {
         console.error('[dataFetching] fetchUserProfile ERROR:', error)
@@ -64,8 +65,8 @@ export const userProfileApi = {
       }
       
       if (!data) {
-        console.log('[dataFetching] fetchUserProfile - No profile found, creating default profile')
-        return await userProfileApi.createDefaultUserProfile(userId)
+        console.log('[dataFetching] fetchUserProfile - No profile found for user:', userId)
+        throw new Error('User profile not found')
       }
       
       // Transform the data to match our User interface
@@ -95,69 +96,6 @@ export const userProfileApi = {
       throw err
     }
   },
-
-  async createDefaultUserProfile(userId: string): Promise<any> {
-    console.log('[dataFetching] createDefaultUserProfile START - userId:', userId)
-    
-    try {
-      // Get the authenticated user's email
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-      if (authError || !authUser) {
-        throw new Error('Unable to get authenticated user details')
-      }
-
-      // Get the default 'viewer' role
-      const { data: viewerRole, error: roleError } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('name', 'viewer')
-        .single()
-
-      if (roleError || !viewerRole) {
-        throw new Error('Default viewer role not found')
-      }
-
-      // Create user profile
-      const { data: newUser, error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          email: authUser.email!,
-          full_name: 'New User',
-          is_active: true,
-          needs_password_reset: true,
-          menu_access: [],
-          sub_menu_access: {},
-          component_access: []
-        })
-        .select('*')
-        .single()
-
-      if (profileError) {
-        throw profileError
-      }
-
-      // Assign default role
-      const { error: roleAssignError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: userId,
-          role_id: viewerRole.id
-        })
-
-      if (roleAssignError) {
-        throw roleAssignError
-      }
-
-      console.log('[dataFetching] createDefaultUserProfile SUCCESS')
-      
-      // Fetch the complete profile with roles
-      return await userProfileApi.fetchUserProfile(userId)
-    } catch (err) {
-      console.error('[dataFetching] createDefaultUserProfile ERROR:', err)
-      throw err
-    }
-  }
 }
 
 // Dashboard Data Fetching

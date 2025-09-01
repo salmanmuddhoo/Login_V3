@@ -78,3 +78,31 @@ export async function retryWithBackoff<T>(
 
   throw lastError!
 }
+
+/**
+ * Safely compares two objects for equality by JSON stringifying them
+ * Handles cases where objects might be null or undefined
+ */
+export function deepEqual(obj1: any, obj2: any): boolean {
+  try {
+    return JSON.stringify(obj1) === JSON.stringify(obj2)
+  } catch (error) {
+    console.error('Error comparing objects:', error)
+    return false
+  }
+}
+
+/**
+ * Debounces a function call, useful for search inputs or API calls
+ */
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout
+  
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }
+}
