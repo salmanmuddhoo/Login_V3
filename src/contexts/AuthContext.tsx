@@ -3,6 +3,62 @@ import { supabase } from '../lib/supabase'
 import { authApi, userProfileApi } from '../lib/dataFetching'
 import { withTimeout } from '../utils/helpers'
 
+// Cache keys for localStorage
+const USER_CACHE_KEY = 'auth_user_profile'
+const CACHE_TIMESTAMP_KEY = 'auth_cache_timestamp'
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
+/**
+ * Safely get cached user data from localStorage
+ */
+const getCachedUser = (): any | null => {
+  try {
+    const cachedUser = localStorage.getItem(USER_CACHE_KEY)
+    const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY)
+    
+    if (!cachedUser || !cacheTimestamp) return null
+    
+    const timestamp = parseInt(cacheTimestamp, 10)
+    const now = Date.now()
+    
+    // Check if cache is still valid (within 5 minutes)
+    if (now - timestamp > CACHE_DURATION) {
+      console.log('[AuthContext] Cache expired, clearing...')
+      localStorage.removeItem(USER_CACHE_KEY)
+      localStorage.removeItem(CACHE_TIMESTAMP_KEY)
+      return null
+    }
+    
+    const user = JSON.parse(cachedUser)
+    console.log('[AuthContext] Using cached user:', user)
+    return user
+  } catch (error) {
+    console.error('[AuthContext] Error reading cached user:', error)
+    localStorage.removeItem(USER_CACHE_KEY)
+    localStorage.removeItem(CACHE_TIMESTAMP_KEY)
+    return null
+  }
+}
+
+/**
+ * Safely cache user data to localStorage
+ */
+const setCachedUser = (user: any | null) => {
+  try {
+    if (user) {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
+      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString())
+      console.log('[AuthContext] User cached successfully')
+    } else {
+      localStorage.removeItem(USER_CACHE_KEY)
+      localStorage.removeItem(CACHE_TIMESTAMP_KEY)
+      console.log('[AuthContext] User cache cleared')
+    }
+  } catch (error) {
+    console.error('[AuthContext] Error caching user:', error)
+  }
+}
+
 /**
  * Defines the shape of the AuthContext.
  * This is what all components using `useAuth()` will have access to.
@@ -25,8 +81,10 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<any | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Initialize user from cache if available
+  const cachedUser = getCachedUser()
+  const [user, setUser] = useState<any | null>(cachedUser)
+  const [loading, setLoading] = useState(!cachedUser) // Don't show loading if we have cached data
   const [error, setError] = useState<string | null>(null)
 
   /**
@@ -75,28 +133,42 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             10000, // 10 seconds for initial load
             'Initial profile fetch timed out'
           )
-          setUser(profile)
+          
+          // Only update state if profile is different from cached version
+          if (!cachedUser || JSON.stringify(profile) !== JSON.stringify(cachedUser)) {
+            setUser(profile)
+            setCachedUser(profile)
+          }
           console.log('[AuthContext] init - Profile set:', profile)
         } else {
           console.log('[AuthContext] init - No session found')
           setUser(null)
+          setCachedUser(null)
           // Ensure clean state if no session
           await supabase.auth.signOut()
         }
       } catch (err) {
         if (err instanceof Error && err.message.includes('timed out')) {
           console.error('[AuthContext] init - TIMEOUT ERROR:', err.message)
-          // Don't immediately log out on timeout during init - try to recover
-          setError('Loading user profile is taking longer than expected. Please refresh if needed.')
+          // If we have cached data, use it and show a warning
+          if (cachedUser) {
+            setError('Using cached profile data. Some information may be outdated.')
+          } else {
+            setError('Loading user profile is taking longer than expected. Please refresh if needed.')
+          }
         } else {
           console.error('[AuthContext] init - CATCH ERROR:', err)
           setUser(null)
+          setCachedUser(null)
           // Clear any invalid tokens on error
           await supabase.auth.signOut()
         }
       } finally {
-        console.log('[AuthContext] init - Setting loading to false')
-        setLoading(false)
+        // Only set loading to false if we don't have cached data
+        if (!cachedUser) {
+          console.log('[AuthContext] init - Setting loading to false')
+          setLoading(false)
+        }
       }
     }
 
@@ -117,11 +189,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             'Profile fetch timed out during auth state change'
           )
           setUser(profile)
+          setCachedUser(profile)
           console.log('[AuthContext] Auth state change - Profile set:', profile)
         } else {
           console.log('[AuthContext] Auth state change - No session, clearing user')
           setUser(null)
-          localStorage.removeItem('userProfile')
+          setCachedUser(null)
+        }
+        
+        // Set loading to false after auth state change is processed
+        if (loading) {
+          setLoading(false)
         }
       } catch (err) {
         console.error('[AuthContext] Auth state change - ERROR:', err)
@@ -170,7 +248,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
 
         setUser(profile)
-        localStorage.setItem('userProfile', JSON.stringify(profile))
+        setCachedUser(profile)
         console.log('[AuthContext] signIn SUCCESS - user set:', profile)
       }
     } catch (err: any) {
@@ -194,7 +272,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.log('[AuthContext] signOut - Calling Supabase auth signOut...')
       await supabase.auth.signOut()
       setUser(null)
-      localStorage.removeItem('userProfile')
+      setCachedUser(null)
       console.log('[AuthContext] signOut SUCCESS')
     } catch (err: any) {
       console.error('[AuthContext] signOut ERROR:', err)
@@ -262,6 +340,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             'Profile refresh timed out'
           )
           setUser(profile)
+          setCachedUser(profile)
           console.log('[AuthContext] refreshUser SUCCESS - profile updated:', profile)
         } catch (timeoutErr) {
           console.error('[AuthContext] refreshUser - TIMEOUT during refresh:', timeoutErr)
