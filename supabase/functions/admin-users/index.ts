@@ -70,30 +70,34 @@ Deno.serve(async (req) => {
 
     // GET users
     if (method === 'GET' && url.pathname.endsWith('/admin-users')) {
-      // First get all users
+      // Get all users with their roles in a single optimized query
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select(`
-          id, email, full_name, menu_access, 
-          sub_menu_access, component_access, is_active, created_at, needs_password_reset
+          id, 
+          email, 
+          full_name, 
+          menu_access, 
+          sub_menu_access, 
+          component_access, 
+          is_active, 
+          created_at, 
+          needs_password_reset,
+          user_roles(
+            roles(
+              id,
+              name,
+              description
+            )
+          )
         `)
         .order('created_at', { ascending: false })
 
       if (usersError) return new Response(JSON.stringify({ error: usersError.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-      // Get user roles for all users
-      const { data: userRolesData, error: userRolesError } = await supabase
-        .from('user_roles')
-        .select(`
-          user_id,
-          roles(id, name, description)
-        `)
-
-      if (userRolesError) return new Response(JSON.stringify({ error: userRolesError.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-
-      // Combine users with their roles
+      // Transform the data to match the expected format
       const users = usersData?.map(user => {
-        const userRoles = userRolesData?.filter(ur => ur.user_id === user.id).map(ur => ur.roles).filter(Boolean) || []
+        const userRoles = user.user_roles?.map(ur => ur.roles).filter(Boolean) || []
         return {
           ...user,
           roles: userRoles,
