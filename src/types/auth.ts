@@ -10,6 +10,7 @@ export interface User {
   created_at: string
   needs_password_reset?: boolean
   roles?: Role[]
+  permissions?: Permission[]
 }
 
 export interface AuthState {

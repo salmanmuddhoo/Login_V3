@@ -87,7 +87,15 @@ Deno.serve(async (req) => {
             roles(
               id,
               name,
-              description
+              description,
+              role_permissions(
+                permissions(
+                  id,
+                  resource,
+                  action,
+                  description
+                )
+              )
             )
           )
         `)
@@ -98,10 +106,22 @@ Deno.serve(async (req) => {
       // Transform the data to match the expected format
       const users = usersData?.map(user => {
         const userRoles = user.user_roles?.map(ur => ur.roles).filter(Boolean) || []
+        
+        // Flatten all permissions from all roles
+        const allPermissions = userRoles.flatMap(role => 
+          role.role_permissions?.map(rp => rp.permissions).filter(Boolean) || []
+        )
+        
+        // Remove duplicate permissions based on resource + action combination
+        const uniquePermissions = allPermissions.filter((permission, index, array) => 
+          array.findIndex(p => p.resource === permission.resource && p.action === permission.action) === index
+        )
+        
         return {
           ...user,
           roles: userRoles,
-          role_ids: userRoles.map(role => role.id)
+          role_ids: userRoles.map(role => role.id),
+          permissions: uniquePermissions
         }
       }) || []
 
@@ -164,15 +184,39 @@ Deno.serve(async (req) => {
         .from('user_roles')
         .select(`
           user_id,
-          roles(id, name, description)
+          roles(
+            id, 
+            name, 
+            description,
+            role_permissions(
+              permissions(
+                id,
+                resource,
+                action,
+                description
+              )
+            )
+          )
         `)
         .eq('user_id', authUser.user.id)
 
       const roles = userWithRoles?.map(ur => ur.roles).filter(Boolean) || []
+      
+      // Flatten all permissions from all roles
+      const allPermissions = roles.flatMap(role => 
+        role.role_permissions?.map(rp => rp.permissions).filter(Boolean) || []
+      )
+      
+      // Remove duplicate permissions
+      const uniquePermissions = allPermissions.filter((permission, index, array) => 
+        array.findIndex(p => p.resource === permission.resource && p.action === permission.action) === index
+      )
+      
       const userResponse = {
         ...newUser,
         roles,
-        role_ids: roles.map(role => role.id)
+        role_ids: roles.map(role => role.id),
+        permissions: uniquePermissions
       }
 
       // Always send password reset email
@@ -234,15 +278,39 @@ Deno.serve(async (req) => {
         .from('user_roles')
         .select(`
           user_id,
-          roles(id, name, description)
+          roles(
+            id, 
+            name, 
+            description,
+            role_permissions(
+              permissions(
+                id,
+                resource,
+                action,
+                description
+              )
+            )
+          )
         `)
         .eq('user_id', userId)
 
       const roles = userWithRoles?.map(ur => ur.roles).filter(Boolean) || []
+      
+      // Flatten all permissions from all roles
+      const allPermissions = roles.flatMap(role => 
+        role.role_permissions?.map(rp => rp.permissions).filter(Boolean) || []
+      )
+      
+      // Remove duplicate permissions
+      const uniquePermissions = allPermissions.filter((permission, index, array) => 
+        array.findIndex(p => p.resource === permission.resource && p.action === permission.action) === index
+      )
+      
       const userResponse = {
         ...updatedUser,
         roles,
-        role_ids: roles.map(role => role.id)
+        role_ids: roles.map(role => role.id),
+        permissions: uniquePermissions
       }
 
       // Always send password reset email if needs_password_reset is true

@@ -1,5 +1,5 @@
 import { supabase, getAuthHeaders } from './supabase'
-import type { User, Role, CreateUserData, UpdateUserData, PasswordValidationResult } from '../types/auth'
+import type { User, Role, Permission, CreateUserData, UpdateUserData, CreateRoleData, UpdateRoleData, CreatePermissionData, UpdatePermissionData, PasswordValidationResult } from '../types/auth'
 
 const API_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 
@@ -42,7 +42,15 @@ export const userProfileApi = {
             roles!inner(
               id, 
               name, 
-              description
+              description,
+              role_permissions(
+                permissions!inner(
+                  id,
+                  resource,
+                  action,
+                  description
+                )
+              )
             )
           )
         `)
@@ -62,10 +70,22 @@ export const userProfileApi = {
       
       // Transform the data to match our User interface
       const roles = data.user_roles?.map(ur => ur.roles).filter(Boolean) || []
+      
+      // Flatten all permissions from all roles
+      const allPermissions = roles.flatMap(role => 
+        role.role_permissions?.map(rp => rp.permissions).filter(Boolean) || []
+      )
+      
+      // Remove duplicate permissions based on resource + action combination
+      const uniquePermissions = allPermissions.filter((permission, index, array) => 
+        array.findIndex(p => p.resource === permission.resource && p.action === permission.action) === index
+      )
+      
       const transformedUser = {
         ...data,
         roles,
-        role_ids: roles.map(role => role.id)
+        role_ids: roles.map(role => role.id),
+        permissions: uniquePermissions
       }
       
       console.log('[dataFetching] fetchUserProfile SUCCESS - user:', transformedUser)
@@ -291,13 +311,29 @@ export const rolesApi = {
     try {
       const { data, error } = await supabase
         .from('roles')
-        .select('*')
+        .select(`
+          *,
+          role_permissions(
+            permissions(
+              id,
+              resource,
+              action,
+              description
+            )
+          )
+        `)
         .order('name')
       
       if (error) throw error
       
+      // Transform data to include permissions array
+      const rolesWithPermissions = data?.map(role => ({
+        ...role,
+        permissions: role.role_permissions?.map(rp => rp.permissions).filter(Boolean) || []
+      })) || []
+      
       console.log('[dataFetching] rolesApi.getRoles SUCCESS')
-      return data || []
+      return rolesWithPermissions
     } catch (err) {
       console.error('[dataFetching] rolesApi.getRoles ERROR:', err)
       throw err
@@ -305,6 +341,127 @@ export const rolesApi = {
   }
 }
 
+// Admin Roles API
+export const adminRolesApi = {
+  async getRoles(): Promise<Role[]> {
+    console.log('[dataFetching] adminRolesApi.getRoles START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-roles`, {
+      method: 'GET',
+      headers
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminRolesApi.getRoles SUCCESS')
+    return result.roles
+  },
+
+  async createRole(roleData: CreateRoleData): Promise<{ role: Role }> {
+    console.log('[dataFetching] adminRolesApi.createRole START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-roles`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(roleData)
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminRolesApi.createRole SUCCESS')
+    return result
+  },
+
+  async updateRole(roleId: string, roleData: UpdateRoleData): Promise<{ role: Role }> {
+    console.log('[dataFetching] adminRolesApi.updateRole START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-roles/${roleId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(roleData)
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminRolesApi.updateRole SUCCESS')
+    return result
+  },
+
+  async deleteRole(roleId: string): Promise<{ message: string }> {
+    console.log('[dataFetching] adminRolesApi.deleteRole START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-roles/${roleId}`, {
+      method: 'DELETE',
+      headers
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminRolesApi.deleteRole SUCCESS')
+    return result
+  }
+}
+
+// Admin Permissions API
+export const adminPermissionsApi = {
+  async getPermissions(): Promise<Permission[]> {
+    console.log('[dataFetching] adminPermissionsApi.getPermissions START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-permissions`, {
+      method: 'GET',
+      headers
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminPermissionsApi.getPermissions SUCCESS')
+    return result.permissions
+  },
+
+  async createPermission(permissionData: CreatePermissionData): Promise<{ permission: Permission }> {
+    console.log('[dataFetching] adminPermissionsApi.createPermission START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-permissions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(permissionData)
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminPermissionsApi.createPermission SUCCESS')
+    return result
+  },
+
+  async updatePermission(permissionId: string, permissionData: UpdatePermissionData): Promise<{ permission: Permission }> {
+    console.log('[dataFetching] adminPermissionsApi.updatePermission START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-permissions/${permissionId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(permissionData)
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminPermissionsApi.updatePermission SUCCESS')
+    return result
+  },
+
+  async deletePermission(permissionId: string): Promise<{ message: string }> {
+    console.log('[dataFetching] adminPermissionsApi.deletePermission START')
+    
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/admin-permissions/${permissionId}`, {
+      method: 'DELETE',
+      headers
+    })
+    
+    const result = await handleResponse(response)
+    console.log('[dataFetching] adminPermissionsApi.deletePermission SUCCESS')
+    return result
+  }
+}
 // Password Validation API
 export const passwordValidationApi = {
   async validatePassword(password: string): Promise<PasswordValidationResult> {

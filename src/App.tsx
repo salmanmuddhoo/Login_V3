@@ -14,6 +14,8 @@ import { ForcePasswordChangePage } from './pages/ForcePasswordChangePage'
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })))
 const AdminUsers = React.lazy(() => import('./pages/AdminUsers').then(module => ({ default: module.AdminUsers })))
+const AdminRoles = React.lazy(() => import('./pages/AdminRoles').then(module => ({ default: module.AdminRoles })))
+const AdminPermissions = React.lazy(() => import('./pages/AdminPermissions').then(module => ({ default: module.AdminPermissions })))
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage })))
 
 // Loading fallback component
@@ -86,6 +88,47 @@ const adminUsersLoader = async () => {
   }
 }
 
+const adminRolesLoader = async () => {
+  console.log('[App] adminRolesLoader START')
+  
+  try {
+    // Prefetch roles and permissions data
+    const [roles, permissions] = await Promise.all([
+      queryClient.fetchQuery({
+        queryKey: queryKeys.adminRoles(),
+        queryFn: adminRolesApi.getRoles,
+      }),
+      queryClient.fetchQuery({
+        queryKey: queryKeys.adminPermissions(),
+        queryFn: adminPermissionsApi.getPermissions,
+      }),
+    ])
+    
+    console.log('[App] adminRolesLoader SUCCESS')
+    return { roles, permissions }
+  } catch (error) {
+    console.error('[App] adminRolesLoader ERROR:', error)
+    return { roles: [], permissions: [] }
+  }
+}
+
+const adminPermissionsLoader = async () => {
+  console.log('[App] adminPermissionsLoader START')
+  
+  try {
+    const permissions = await queryClient.fetchQuery({
+      queryKey: queryKeys.adminPermissions(),
+      queryFn: adminPermissionsApi.getPermissions,
+    })
+    
+    console.log('[App] adminPermissionsLoader SUCCESS')
+    return { permissions }
+  } catch (error) {
+    console.error('[App] adminPermissionsLoader ERROR:', error)
+    return { permissions: [] }
+  }
+}
+
 // Router configuration with loaders
 const router = createBrowserRouter([
   {
@@ -143,13 +186,37 @@ const router = createBrowserRouter([
       {
         path: 'admin/users',
         element: (
-          <ProtectedRoute requiredPermission={{ resource: 'users', action: 'read' }}>
+          <ProtectedRoute requiredPermission={{ resource: 'users', action: 'manage' }}>
             <Suspense fallback={<PageLoadingFallback />}>
               <AdminUsers />
             </Suspense>
           </ProtectedRoute>
         ),
         loader: adminUsersLoader,
+        hydrateFallbackElement: <PageLoadingFallback />,
+      },
+      {
+        path: 'admin/roles',
+        element: (
+          <ProtectedRoute requiredPermission={{ resource: 'roles', action: 'manage' }}>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminRoles />
+            </Suspense>
+          </ProtectedRoute>
+        ),
+        loader: adminRolesLoader,
+        hydrateFallbackElement: <PageLoadingFallback />,
+      },
+      {
+        path: 'admin/permissions',
+        element: (
+          <ProtectedRoute requiredPermission={{ resource: 'permissions', action: 'manage' }}>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminPermissions />
+            </Suspense>
+          </ProtectedRoute>
+        ),
+        loader: adminPermissionsLoader,
         hydrateFallbackElement: <PageLoadingFallback />,
       },
       {

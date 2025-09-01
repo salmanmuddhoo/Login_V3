@@ -3,7 +3,7 @@ import { useLoaderData } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../lib/queryClient'
 import { Plus, Search, Edit, Trash2, Shield } from 'lucide-react'
-import { adminUsersApi, rolesApi, ApiError } from '../lib/dataFetching'
+import { adminUsersApi, adminRolesApi, ApiError } from '../lib/dataFetching'
 import { generateTemporaryPassword } from '../utils/validation'
 import type { User, Role, CreateUserData, UpdateUserData } from '../types/auth'
 
@@ -26,8 +26,8 @@ export function AdminUsers() {
   })
 
   const { data: roles } = useQuery({
-    queryKey: queryKeys.roles(),
-    queryFn: rolesApi.getRoles,
+    queryKey: queryKeys.adminRoles(),
+    queryFn: adminRolesApi.getRoles,
     initialData: loaderData.roles,
   })
 

@@ -21,27 +21,10 @@ export function hasPermission(user: User | null, resource: string, action: strin
   // Check if user has admin role - admin has all permissions
   if (user.roles?.some(role => role.name === 'admin')) return true
   
-  // Get all role names for the user
-  const roleNames = user.roles?.map(role => role.name) || []
-  
-  switch (resource) {
-    case 'admin':
-      return roleNames.includes('admin')
-    case 'dashboard':
-      return roleNames.some(name => ['admin', 'member', 'viewer'].includes(name))
-    case 'users':
-      return roleNames.includes('admin')
-    case 'reports':
-      if (action === 'view') return roleNames.some(name => ['admin', 'member', 'viewer'].includes(name))
-      if (action === 'export') return roleNames.some(name => ['admin', 'member'].includes(name))
-      return false
-    case 'transactions':
-      if (action === 'create') return roleNames.some(name => ['admin', 'member'].includes(name))
-      if (action === 'approve') return roleNames.includes('admin')
-      return false
-    default:
-      return false
-  }
+  // Check if user has the specific permission through their roles
+  return user.permissions?.some(permission => 
+    permission.resource === resource && permission.action === action
+  ) || false
 }
 
 export function isAdmin(user: User | null): boolean {

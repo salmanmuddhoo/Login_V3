@@ -10,6 +10,7 @@ import {
   Settings,
   BarChart3,
   Shield,
+  Key,
 } from 'lucide-react'
 
 interface NavItem {
@@ -36,7 +37,19 @@ const navigation: NavItem[] = [
     name: 'User Management',
     href: '/admin/users',
     icon: Users,
-    permission: { resource: 'users', action: 'read' }
+    permission: { resource: 'users', action: 'manage' }
+  },
+  {
+    name: 'Role Management',
+    href: '/admin/roles',
+    icon: Shield,
+    permission: { resource: 'roles', action: 'manage' }
+  },
+  {
+    name: 'Permission Management',
+    href: '/admin/permissions',
+    icon: Key,
+    permission: { resource: 'permissions', action: 'manage' }
   },
   {
     name: 'Reports',

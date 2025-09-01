@@ -52,6 +52,20 @@ const quickActions = [
     color: 'bg-blue-500'
   },
   {
+    name: 'Role Management',
+    description: 'Create and manage user roles',
+    href: '/admin/roles',
+    icon: Shield,
+    color: 'bg-emerald-500'
+  },
+  {
+    name: 'Permission Management',
+    description: 'Define system permissions',
+    href: '/admin/permissions',
+    icon: Settings,
+    color: 'bg-purple-500'
+  },
+  {
     name: 'System Settings',
     description: 'Configure system parameters',
     href: '/admin/settings',
