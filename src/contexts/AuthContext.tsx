@@ -437,6 +437,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(profile)
           setCachedUser(profile)
           console.log('[AuthContext] refreshUser SUCCESS - profile updated:', profile)
+          
+          // Clear permission cache when user data changes
+          clearPermissionCache()
         } catch (timeoutErr) {
           console.error('[AuthContext] refreshUser - TIMEOUT during refresh:', timeoutErr)
           setError('Profile refresh timed out. Using existing data.')

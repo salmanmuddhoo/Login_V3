@@ -58,12 +58,16 @@ export function Dashboard() {
     queryKey: queryKeys.dashboardStats(),
     queryFn: dashboardApi.getStats,
     initialData: loaderData.stats.length > 0 ? loaderData.stats : defaultStats,
+    staleTime: 10 * 60 * 1000, // Dashboard stats can be cached longer (10 minutes)
+    placeholderData: (previousData) => previousData,
   })
 
   const { data: recentActivity = [] } = useQuery({
     queryKey: queryKeys.dashboardActivity(),
     queryFn: dashboardApi.getRecentActivity,
     initialData: loaderData.activity,
+    staleTime: 2 * 60 * 1000, // Activity data should be fresher (2 minutes)
+    placeholderData: (previousData) => previousData,
   })
 
   const visibleStats = stats.filter(stat => {

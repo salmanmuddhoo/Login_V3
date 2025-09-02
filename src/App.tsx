@@ -119,6 +119,7 @@ const adminPermissionsLoader = async () => {
     const permissions = await queryClient.fetchQuery({
       queryKey: queryKeys.adminPermissions(),
       queryFn: adminPermissionsApi.getPermissions,
+      staleTime: 10 * 60 * 1000, // Cache permissions for 10 minutes
     })
     
     console.log('[App] adminPermissionsLoader SUCCESS')
