@@ -24,7 +24,6 @@ export const getAccessToken = async (): Promise<string | null> => {
 
     return null
   } catch (err) {
-    console.error('Failed to get Supabase access token:', err)
     return null
   }
 }

@@ -86,7 +86,6 @@ export const validatePasswordServerSide = async (password: string): Promise<Pass
     const data = await response.json()
     return data as PasswordValidationResult
   } catch (error) {
-    console.error('Error calling password validation Edge Function:', error)
     return { 
       isValid: false, 
       message: 'Could not connect to password validation service.',

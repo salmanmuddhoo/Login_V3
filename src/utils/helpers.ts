@@ -71,7 +71,6 @@ export async function retryWithBackoff<T>(
       }
 
       const delayMs = baseDelay * Math.pow(2, attempt)
-      console.log(`[retryWithBackoff] Attempt ${attempt + 1} failed, retrying in ${delayMs}ms...`, lastError.message)
       await delay(delayMs)
     }
   }
@@ -87,7 +86,6 @@ export function deepEqual(obj1: any, obj2: any): boolean {
   try {
     return JSON.stringify(obj1) === JSON.stringify(obj2)
   } catch (error) {
-    console.error('Error comparing objects:', error)
     return false
   }
 }

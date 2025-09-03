@@ -23,7 +23,6 @@ export function LoginForm() {
       // The signIn function in AuthContext will automatically set the user
       // We'll handle navigation in a useEffect that watches for user changes
     } catch (error) {
-      console.error('Login failed:', error)
     } finally {
       setIsLoading(false)
     }

@@ -12,7 +12,6 @@ export function Navbar() {
     try {
       await signOut()
     } catch (error) {
-      console.error('Sign out error:', error)
     } finally {
       setIsSigningOut(false)
     }

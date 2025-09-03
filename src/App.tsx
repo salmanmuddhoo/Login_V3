@@ -39,8 +39,6 @@ const AppLoadingFallback = () => (
 
 // Route loaders for data prefetching
 const dashboardLoader = async () => {
-  console.log('[App] dashboardLoader START')
-  
   try {
     // Prefetch dashboard data
     const [stats, activity] = await Promise.all([
@@ -54,18 +52,14 @@ const dashboardLoader = async () => {
       }),
     ])
     
-    console.log('[App] dashboardLoader SUCCESS')
     return { stats, activity }
   } catch (error) {
-    console.error('[App] dashboardLoader ERROR:', error)
     // Return empty data on error - components will handle loading states
     return { stats: [], activity: [] }
   }
 }
 
 const adminUsersLoader = async () => {
-  console.log('[App] adminUsersLoader START')
-  
   try {
     // Prefetch users and roles data
     const [usersData, roles] = await Promise.all([
@@ -79,18 +73,14 @@ const adminUsersLoader = async () => {
       }),
     ])
     
-    console.log('[App] adminUsersLoader SUCCESS')
     return { users: usersData.users, roles }
   } catch (error) {
-    console.error('[App] adminUsersLoader ERROR:', error)
     // Return empty data on error - components will handle loading states
     return { users: [], roles: [] }
   }
 }
 
 const adminRolesLoader = async () => {
-  console.log('[App] adminRolesLoader START')
-  
   try {
     // Prefetch roles and permissions data
     const [roles, permissions] = await Promise.all([
@@ -104,17 +94,13 @@ const adminRolesLoader = async () => {
       }),
     ])
     
-    console.log('[App] adminRolesLoader SUCCESS')
     return { roles, permissions }
   } catch (error) {
-    console.error('[App] adminRolesLoader ERROR:', error)
     return { roles: [], permissions: [] }
   }
 }
 
 const adminPermissionsLoader = async () => {
-  console.log('[App] adminPermissionsLoader START')
-  
   try {
     const permissions = await queryClient.fetchQuery({
       queryKey: queryKeys.adminPermissions(),
@@ -122,10 +108,8 @@ const adminPermissionsLoader = async () => {
       staleTime: 10 * 60 * 1000, // Cache permissions for 10 minutes
     })
     
-    console.log('[App] adminPermissionsLoader SUCCESS')
     return { permissions }
   } catch (error) {
-    console.error('[App] adminPermissionsLoader ERROR:', error)
     return { permissions: [] }
   }
 }
