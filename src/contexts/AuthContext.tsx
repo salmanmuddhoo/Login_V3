@@ -2,56 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '../lib/supabase'
 import { authApi, userProfileApi } from '../lib/dataFetching'
 import { withTimeout } from '../utils/helpers'
-
-// Cache keys for localStorage
-const USER_CACHE_KEY = 'auth_user_profile'
-const CACHE_TIMESTAMP_KEY = 'auth_cache_timestamp'
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
-
-/**
- * Safely get cached user data from localStorage
- */
-const getCachedUser = (): any | null => {
-  try {
-    const cachedUser = localStorage.getItem(USER_CACHE_KEY)
-    const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY)
-    
-    if (!cachedUser || !cacheTimestamp) return null
-    
-    const timestamp = parseInt(cacheTimestamp, 10)
-    const now = Date.now()
-    
-    // Check if cache is still valid (within 5 minutes)
-    if (now - timestamp > CACHE_DURATION) {
-      localStorage.removeItem(USER_CACHE_KEY)
-      localStorage.removeItem(CACHE_TIMESTAMP_KEY)
-      return null
-    }
-    
-    const user = JSON.parse(cachedUser)
-    return user
-  } catch (error) {
-    localStorage.removeItem(USER_CACHE_KEY)
-    localStorage.removeItem(CACHE_TIMESTAMP_KEY)
-    return null
-  }
-}
-
-/**
- * Safely cache user data to localStorage
- */
-const setCachedUser = (user: any | null) => {
-  try {
-    if (user) {
-      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
-      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString())
-    } else {
-      localStorage.removeItem(USER_CACHE_KEY)
-      localStorage.removeItem(CACHE_TIMESTAMP_KEY)
-    }
-  } catch (error) {
-  }
-}
+import { queryClient, queryKeys } from '../lib/queryClient';
+import { clearPermissionCache } from '../utils/permissions';
 
 /**
  * Defines the shape of the AuthContext.
@@ -75,12 +27,9 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  // Initialize user from cache if available
-  const cachedUser = getCachedUser()
-  const [user, setUser] = useState<any | null>(cachedUser)
-  const [loading, setLoading] = useState(false) // Start with false for instant UI
+  const [user, setUser] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isInitialized, setIsInitialized] = useState(!!cachedUser) // Immediately initialized if cached
 
   /**
    * Fetches extra profile data from your custom `users` table
@@ -101,64 +50,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
    * Also subscribe to auth state changes (login/logout/password change).
    */
   useEffect(() => {
-    // If we have cached user data, immediately initialize and start background refresh
-    if (cachedUser) {
-      setUser(cachedUser)
-      setLoading(false)
-      setIsInitialized(true)
-      
-      // Start background refresh to ensure data is current
-      const backgroundRefresh = async () => {
-        try {
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-          
-          if (sessionError || !session?.user) {
-            setUser(null)
-            setCachedUser(null)
-            await supabase.auth.signOut()
-            return
-          }
-          
-          // Fetch fresh profile data in background
-          const freshProfile = await withTimeout(
-            fetchUserProfile(session.user.id),
-            15000, // 15 seconds for background refresh
-            'Background profile refresh timed out'
-          )
-          
-          // Check if user account is still active
-          if (!freshProfile?.is_active) {
-            setUser(null)
-            setCachedUser(null)
-            await supabase.auth.signOut()
-            return
-          }
-          
-          // Only update if data has changed
-          if (JSON.stringify(freshProfile) !== JSON.stringify(cachedUser)) {
-            setUser(freshProfile)
-            setCachedUser(freshProfile)
-          } else {
-          }
-          
-          // Clear any previous errors
-          setError(null)
-        } catch (err) {
-          // Don't clear user on background refresh failure - just show warning
-          if (err instanceof Error && err.message.includes('timed out')) {
-            setError('Profile data may be outdated. Please refresh if needed.')
-          } else {
-            setError('Unable to refresh profile data. Some features may not work correctly.')
-          }
-        }
-      }
-      
-      // Start background refresh after a short delay to not block initial render
-      setTimeout(backgroundRefresh, 100)
-      return
-    }
-    
-    // No cached data - proceed with full initialization
     const init = async () => {
       setLoading(true)
       try {
@@ -172,40 +63,31 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
         
         if (session?.user) {
-          const profile = await withTimeout(
-            fetchUserProfile(session.user.id),
-            10000, // 10 seconds for initial load
-            'Initial profile fetch timed out'
-          )
+          const profile = await queryClient.fetchQuery({
+            queryKey: queryKeys.userProfile(session.user.id),
+            queryFn: () => fetchUserProfile(session.user.id),
+            staleTime: Infinity,
+            gcTime: Infinity,
+          });
           
           // Check if user account is active
-          if (!profile?.is_active) {
-            setUser(null)
-            setCachedUser(null)
+          if (profile?.is_active) {
+            setUser(profile)
+          } else {
             await supabase.auth.signOut()
-            return
+            setUser(null)
           }
-          
-          setUser(profile)
-          setCachedUser(profile)
         } else {
           setUser(null)
-          setCachedUser(null)
           // Ensure clean state if no session
           await supabase.auth.signOut()
         }
       } catch (err) {
-        if (err instanceof Error && err.message.includes('timed out')) {
-          setError('Loading user profile is taking longer than expected. Please refresh if needed.')
-        } else {
-          setUser(null)
-          setCachedUser(null)
-          // Clear any invalid tokens on error
-          await supabase.auth.signOut()
-        }
+        setUser(null)
+        // Clear any invalid tokens on error
+        await supabase.auth.signOut()
       } finally {
         setLoading(false)
-        setIsInitialized(true)
       }
     }
 
@@ -215,32 +97,31 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session?.user) {
-          const profile = await withTimeout(
-            fetchUserProfile(session.user.id),
-            20000, // 20 seconds for auth state changes
-            'Profile fetch timed out during auth state change'
-          )
+          const profile = await queryClient.fetchQuery({
+            queryKey: queryKeys.userProfile(session.user.id),
+            queryFn: () => fetchUserProfile(session.user.id),
+            staleTime: Infinity,
+            gcTime: Infinity,
+          });
           
           // Check if user account is active
-          if (!profile?.is_active) {
-            setUser(null)
-            setCachedUser(null)
+          if (profile?.is_active) {
+            setUser(profile)
+          } else {
             await supabase.auth.signOut()
-            return
+            setUser(null)
           }
-          
-          setUser(profile)
-          setCachedUser(profile)
         } else {
+          if (user?.id) {
+            queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) });
+          }
           setUser(null)
-          setCachedUser(null)
         }
         
         // Set loading to false after auth state change is processed
         if (loading) {
           setLoading(false)
         }
-        setIsInitialized(true)
       } catch (err) {
         // For auth state changes, be more graceful with errors
         if (err instanceof Error && err.message.includes('timed out')) {
@@ -248,7 +129,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         } else {
           setError('Failed to refresh user profile. Some features may not work correctly.')
         }
-        setIsInitialized(true)
       }
     })
 
@@ -273,11 +153,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       if (data.user) {
-        const profile = await withTimeout(
-          fetchUserProfile(data.user.id),
-          8000,
-          'Profile fetch timed out during sign in'
-        )
+        const profile = await queryClient.fetchQuery({
+          queryKey: queryKeys.userProfile(data.user.id),
+          queryFn: () => fetchUserProfile(data.user.id),
+          staleTime: Infinity,
+          gcTime: Infinity,
+        });
 
         // prevent inactive accounts from signing in
         if (!profile?.is_active) {
@@ -286,7 +167,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
 
         setUser(profile)
-        setCachedUser(profile)
       }
     } catch (err: any) {
       setError(err.message)
@@ -301,8 +181,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
    */
   const signOut = async () => {
     // Immediately clear user state and cache for instant UI feedback
+    if (user?.id) {
+      queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) });
+    }
     setUser(null)
-    setCachedUser(null)
     setError(null)
     
     try {
@@ -355,22 +237,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       if (sessionUser) {
         try {
-          const profile = await withTimeout(
-            fetchUserProfile(sessionUser.id),
-            15000, // 15 seconds for manual refresh
-            'Profile refresh timed out'
-          )
+          // Invalidate cache to ensure fresh data
+          queryClient.invalidateQueries({ queryKey: queryKeys.userProfile(sessionUser.id) });
+          
+          const profile = await queryClient.fetchQuery({
+            queryKey: queryKeys.userProfile(sessionUser.id),
+            queryFn: () => fetchUserProfile(sessionUser.id),
+            staleTime: Infinity,
+            gcTime: Infinity,
+          });
           
           // Check if user account is still active
           if (!profile?.is_active) {
             setUser(null)
-            setCachedUser(null)
             await supabase.auth.signOut()
             return
           }
           
           setUser(profile)
-          setCachedUser(profile)
           
           // Clear permission cache when user data changes
           clearPermissionCache()
@@ -379,7 +263,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       } else {
         setUser(null)
-        setCachedUser(null)
       }
     } catch (err) {
       setError('Failed to refresh user profile. Using existing data.')
@@ -415,7 +298,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   return (
     <AuthContext.Provider value={{ 
       user, 
-      loading: loading && !isInitialized, // Only show loading if not initialized and no cached data
+      loading,
       error, 
       signIn, 
       signOut, 
