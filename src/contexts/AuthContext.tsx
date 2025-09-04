@@ -7,7 +7,7 @@ import { queryClient, queryKeys } from '../lib/queryClient';
 import { clearPermissionCache } from '../utils/permissions';
 
 // Inactivity timeout: 15 minutes
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000
 
 /**
  * Defines the shape of the AuthContext.
