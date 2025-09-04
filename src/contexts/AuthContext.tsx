@@ -6,7 +6,7 @@ import { withTimeout } from '../utils/helpers'
 import { queryClient, queryKeys } from '../lib/queryClient';
 import { clearPermissionCache } from '../utils/permissions';
 
-// Inactivity timeout: 15 minutes
+// Inactivity timeout: 60 minutes
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000
 
 /**
