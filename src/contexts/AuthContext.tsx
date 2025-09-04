@@ -1,9 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { authApi, userProfileApi } from '../lib/dataFetching'
 import { withTimeout } from '../utils/helpers'
 import { queryClient, queryKeys } from '../lib/queryClient';
 import { clearPermissionCache } from '../utils/permissions';
+
+// Inactivity timeout: 15 minutes
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
 
 /**
  * Defines the shape of the AuthContext.
@@ -30,6 +34,63 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  /**
+   * Resets the inactivity timer. Called on user interactions and when user logs in.
+   */
+  const resetInactivityTimer = useCallback(() => {
+    // Clear existing timer
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current)
+      inactivityTimerRef.current = null
+    }
+
+    // Only set timer if user is logged in
+    if (user) {
+      inactivityTimerRef.current = setTimeout(() => {
+        console.log('User inactive for 15 minutes, logging out...')
+        signOut()
+      }, INACTIVITY_TIMEOUT_MS)
+    }
+  }, [user])
+
+  /**
+   * Set up inactivity monitoring when user is logged in
+   */
+  useEffect(() => {
+    if (user) {
+      // Start the inactivity timer
+      resetInactivityTimer()
+
+      // Activity event listeners
+      const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
+      
+      activityEvents.forEach(event => {
+        window.addEventListener(event, resetInactivityTimer, { passive: true })
+      })
+
+      // Cleanup function
+      return () => {
+        // Clear the timer
+        if (inactivityTimerRef.current) {
+          clearTimeout(inactivityTimerRef.current)
+          inactivityTimerRef.current = null
+        }
+
+        // Remove event listeners
+        activityEvents.forEach(event => {
+          window.removeEventListener(event, resetInactivityTimer)
+        })
+      }
+    } else {
+      // Clear timer if user is not logged in
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current)
+        inactivityTimerRef.current = null
+      }
+    }
+  }, [user, resetInactivityTimer])
 
   /**
    * Fetches extra profile data from your custom `users` table
@@ -180,6 +241,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
    * Logs the user out from Supabase and clears local state.
    */
   const signOut = async () => {
+    // Clear inactivity timer immediately
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current)
+      inactivityTimerRef.current = null
+    }
+
     // Immediately clear user state and cache for instant UI feedback
     if (user?.id) {
       queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) });
@@ -258,6 +325,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           
           // Clear permission cache when user data changes
           clearPermissionCache()
+          
+          // Reset inactivity timer with fresh user data
+          resetInactivityTimer()
         } catch (timeoutErr) {
           setError('Profile refresh timed out. Using existing data.')
         }
