@@ -35,7 +35,6 @@ export function LoginForm() {
         navigate('/force-password-change', { replace: true })
       } else if (user.roles?.some(role => role.name === 'admin')) {
         navigate('/admin/dashboard', { replace: true })
-      } else {
         navigate('/dashboard', { replace: true })
       }
     }

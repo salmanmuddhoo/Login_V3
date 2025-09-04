@@ -19,7 +19,6 @@ export function ProtectedRoute({
   const { user, loading } = useAuth()
   const location = useLocation()
 
-
   // Only show loading spinner if we're actually loading (no cached data available)
   if (loading && !user) {
     return (

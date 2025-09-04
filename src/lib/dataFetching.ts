@@ -391,3 +391,50 @@ export const authApi = {
     return result
   }
 }
+
+export const fetchUserProfile = async (userId: string) => {
+  
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+};
+
+export const fetchUserRoles = async (userId: string) => {
+  
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+};
+
+export const fetchRolePermissions = async (roleIds: string[]) => {
+  
+  if (roleIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('role_permissions')
+    .select('*')
+    .in('role_id', roleIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+};

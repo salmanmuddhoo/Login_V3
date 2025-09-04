@@ -13,7 +13,6 @@ export function Navbar() {
       await signOut()
     } catch (error) {
     } finally {
-      setIsSigningOut(false)
     }
   }
 
