@@ -17,6 +17,7 @@ const AdminUsers = React.lazy(() => import('./pages/AdminUsers').then(module => 
 const AdminRoles = React.lazy(() => import('./pages/AdminRoles').then(module => ({ default: module.AdminRoles })))
 const AdminPermissions = React.lazy(() => import('./pages/AdminPermissions').then(module => ({ default: module.AdminPermissions })))
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage })))
+const StaffReportsPage = React.lazy(() => import('./pages/StaffReportsPage').then(module => ({ default: module.StaffReportsPage })))
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -220,10 +221,7 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'reports', action: 'view' }}>
             <Suspense fallback={<PageLoadingFallback />}>
-              <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900">Reports</h2>
-                <p className="text-gray-600 mt-2">Coming soon...</p>
-              </div>
+              <StaffReportsPage />
             </Suspense>
           </ProtectedRoute>
         ),
