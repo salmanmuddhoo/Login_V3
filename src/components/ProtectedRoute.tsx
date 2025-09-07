@@ -19,8 +19,19 @@ export function ProtectedRoute({
   const { user, loading } = useAuth()
   const location = useLocation()
 
+  console.log('🛡️ ProtectedRoute: Rendering with state:', {
+    hasUser: !!user,
+    userId: user?.id,
+    loading,
+    requireAdmin,
+    requiredPermission,
+    pathname: location.pathname,
+    isActive: user?.is_active,
+    needsPasswordReset: user?.needs_password_reset
+  })
   // Only show loading spinner if we're actually loading (no cached data available)
   if (loading && !user) {
+    console.log('⏳ ProtectedRoute: Showing loading spinner (loading && !user)')
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -32,15 +43,18 @@ export function ProtectedRoute({
   }
 
   if (!user) {
+    console.log('🚫 ProtectedRoute: No user found, redirecting to login')
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
   // Check if user needs to change their password
   if (user.needs_password_reset && location.pathname !== '/force-password-change') {
+    console.log('🔐 ProtectedRoute: User needs password reset, redirecting')
     return <Navigate to="/force-password-change" replace />
   }
 
   if (!user.is_active) {
+    console.log('⚠️ ProtectedRoute: User account is inactive')
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -52,10 +66,12 @@ export function ProtectedRoute({
   }
 
   if (requireAdmin && !isAdmin(user)) {
+    console.log('🚫 ProtectedRoute: Admin required but user is not admin, redirecting to dashboard')
     return <Navigate to="/dashboard" replace />
   }
 
   if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
+    console.log('🚫 ProtectedRoute: Required permission not found:', requiredPermission)
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -66,5 +82,6 @@ export function ProtectedRoute({
     )
   }
 
+  console.log('✅ ProtectedRoute: All checks passed, rendering children')
   return <>{children}</>
 }
