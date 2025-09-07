@@ -15,15 +15,24 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
  * If the session is expired or missing, returns null instead of throwing.
  */
 export const getAccessToken = async (): Promise<string | null> => {
+  console.log('🔑 Supabase: Getting access token...')
   try {
     const {
       data: { session },
     } = await supabase.auth.getSession()
 
+    console.log('📊 Supabase: Session check result:', {
+      hasSession: !!session,
+      hasAccessToken: !!session?.access_token,
+      expiresAt: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'N/A',
+      isExpired: session?.expires_at ? Date.now() > session.expires_at * 1000 : 'Unknown'
+    })
     if (session?.access_token) return session.access_token
 
+    console.log('⚠️ Supabase: No access token available')
     return null
   } catch (err) {
+    console.error('❌ Supabase: Error getting access token:', err)
     return null
   }
 }
