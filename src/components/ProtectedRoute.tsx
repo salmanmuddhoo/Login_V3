@@ -10,61 +10,42 @@ interface ProtectedRouteProps {
   redirectTo?: string
 }
 
-export function ProtectedRoute({ 
-  children, 
-  requireAdmin = false, 
-  requiredPermission,
-  redirectTo = '/login'
-}: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+export function ProtectedRoute({ children, requireAdmin = false, requiredPermission, redirectTo = '/login' }: ProtectedRouteProps) {
+  const { user, loading, hasSession } = useAuth()
   const location = useLocation()
 
-  // Only show loading spinner if we're actually loading (no cached data available)
-  if (loading && !user) {
+  // Show spinner only if no session and still loading
+  if (loading && !hasSession) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600"></div>
       </div>
     )
   }
 
-  if (!user) {
-    return <Navigate to={redirectTo} state={{ from: location }} replace />
-  }
+  // Redirect to login if no session
+  if (!hasSession) return <Navigate to={redirectTo} state={{ from: location }} replace />
 
-  // Check if user needs to change their password
-  if (user.needs_password_reset && location.pathname !== '/force-password-change') {
-    return <Navigate to="/force-password-change" replace />
-  }
-
-  if (!user.is_active) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Account Inactive</h2>
-          <p className="text-gray-600">Your account has been deactivated. Please contact an administrator.</p>
-        </div>
+  // Profile checks
+  if (user?.needs_password_reset && location.pathname !== '/force-password-change') return <Navigate to="/force-password-change" replace />
+  if (user && !user.is_active) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="bg-white shadow-md p-6 rounded-lg text-center">
+        <h2 className="text-xl font-semibold mb-2">Account Inactive</h2>
+        <p>Your account has been deactivated. Contact an admin.</p>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (requireAdmin && !isAdmin(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-
-  if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600">You don't have permission to access this resource.</p>
-        </div>
+  if (requireAdmin && user && !isAdmin(user)) return <Navigate to="/dashboard" replace />
+  if (requiredPermission && user && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="bg-white shadow-md p-6 rounded-lg text-center">
+        <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+        <p>You don't have permission to access this resource.</p>
       </div>
-    )
-  }
+    </div>
+  )
 
   return <>{children}</>
 }
