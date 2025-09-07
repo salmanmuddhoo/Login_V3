@@ -1,185 +1,113 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { useRef, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
-import { authApi, userProfileApi } from '../lib/dataFetching'
-import { queryClient, queryKeys } from '../lib/queryClient'
-import { clearPermissionCache } from '../utils/permissions'
-
-// Inactivity timeout: 15 minutes
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '../supabaseClient'
 
 interface AuthContextType {
-  user: any | null
+  user: any
   loading: boolean
-  error: string | null
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string) => Promise<any>
   signOut: () => Promise<void>
+  sendPasswordResetEmail: (email: string) => Promise<any>
   refreshUser: () => Promise<void>
-  changePassword: (newPassword: string, clearNeedsPasswordReset?: boolean) => Promise<void>
-  sendPasswordResetEmail: (email: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-interface AuthProviderProps {
-  children: ReactNode
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<any | null>(null)
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const resetInactivityTimer = useCallback(() => {
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current)
-      inactivityTimerRef.current = null
-    }
-    if (user) {
-      inactivityTimerRef.current = setTimeout(() => {
-        console.log('User inactive for 15 minutes, logging out...')
-        signOut()
-      }, INACTIVITY_TIMEOUT_MS)
-    }
-  }, [user])
+  // Fetch profile helper
+  const fetchUserProfile = async (id: string) => {
+    console.log("Fetching user profile for:", id)
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-  useEffect(() => {
-    if (user) {
-      resetInactivityTimer()
-      const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
-      activityEvents.forEach(event => {
-        window.addEventListener(event, resetInactivityTimer, { passive: true })
-      })
-      return () => {
-        if (inactivityTimerRef.current) {
-          clearTimeout(inactivityTimerRef.current)
-          inactivityTimerRef.current = null
-        }
-        activityEvents.forEach(event => {
-          window.removeEventListener(event, resetInactivityTimer)
-        })
-      }
-    } else {
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current)
-        inactivityTimerRef.current = null
-      }
+    if (error) {
+      console.error("Error fetching user profile:", error.message)
+      return null
     }
-  }, [user, resetInactivityTimer])
-
-  const fetchUserProfile = async (userId: string) => {
-    return await userProfileApi.fetchUserProfile(userId)
+    console.log("User profile loaded:", data)
+    return data
   }
 
+  // Refresh user manually
+  const refreshUser = async () => {
+    console.log("Refreshing user...")
+    setLoading(true)
+    try {
+      const { data: { user: sessionUser }, error } = await supabase.auth.getUser()
+      if (error) throw error
+
+      if (sessionUser) {
+        const profile = await fetchUserProfile(sessionUser.id)
+        setUser(profile ? { ...sessionUser, ...profile } : sessionUser)
+      } else {
+        setUser(null)
+      }
+    } catch (err) {
+      console.error("Error refreshing user:", err)
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Auth state initializer
   useEffect(() => {
     const init = async () => {
+      console.log("Auth init starting...")
       setLoading(true)
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-
-        if (sessionError) {
-          console.error("Session error:", sessionError)
-          setUser(null)
-          return
-        }
+        console.log("Initial Supabase session:", session, sessionError)
 
         if (session?.user) {
-          try {
-            const profile = await queryClient.fetchQuery({
-              queryKey: queryKeys.userProfile(session.user.id),
-              queryFn: () => fetchUserProfile(session.user.id),
-              staleTime: Infinity,
-              gcTime: Infinity,
-            })
-
-            if (profile?.is_active) {
-              setUser(profile)
-            } else {
-              console.warn("Inactive account")
-              await supabase.auth.signOut()
-              setUser(null)
-            }
-          } catch (err) {
-            console.error("Profile fetch failed:", err)
-            // fallback: at least keep Supabase session user
-            setUser(session.user)
-          }
-        } else {
-          setUser(null)
+          const profile = await fetchUserProfile(session.user.id)
+          setUser(profile ? { ...session.user, ...profile } : session.user)
         }
       } catch (err) {
-        console.error("Init error:", err)
+        console.error("Error during auth init:", err)
         setUser(null)
       } finally {
+        console.log("Auth init done")
         setLoading(false)
       }
     }
 
     init()
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
-      try {
-        if (session?.user) {
-          try {
-            const profile = await queryClient.fetchQuery({
-              queryKey: queryKeys.userProfile(session.user.id),
-              queryFn: () => fetchUserProfile(session.user.id),
-              staleTime: Infinity,
-              gcTime: Infinity,
-            })
-
-            if (profile?.is_active) {
-              setUser(profile)
-            } else {
-              await supabase.auth.signOut()
-              setUser(null)
-            }
-          } catch (err) {
-            console.error("Profile refresh failed:", err)
-            setUser(session.user)
-          }
-        } else {
-          if (user?.id) {
-            queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) })
-          }
-          setUser(null)
-        }
-      } catch (err) {
-        console.error("Auth state change error:", err)
-        setError("Auth state update failed.")
-      } finally {
-        setLoading(false)
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change:", event, session)
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user.id)
+        setUser(profile ? { ...session.user, ...profile } : session.user)
+      } else {
+        setUser(null)
       }
+      setLoading(false)
     })
 
     return () => {
-      subscription.subscription.unsubscribe()
+      listener.subscription.unsubscribe()
     }
   }, [])
 
   const signIn = async (email: string, password: string) => {
     setLoading(true)
-    setError(null)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
 
       if (data.user) {
-        const profile = await queryClient.fetchQuery({
-          queryKey: queryKeys.userProfile(data.user.id),
-          queryFn: () => fetchUserProfile(data.user.id),
-          staleTime: Infinity,
-          gcTime: Infinity,
-        })
-        if (!profile?.is_active) {
-          await supabase.auth.signOut()
-          throw new Error('Account is inactive')
-        }
-        setUser(profile)
+        const profile = await fetchUserProfile(data.user.id)
+        setUser(profile ? { ...data.user, ...profile } : data.user)
       }
-    } catch (err: any) {
-      setError(err.message)
+      return data
+    } catch (err) {
+      console.error("Sign in error:", err)
       throw err
     } finally {
       setLoading(false)
@@ -187,77 +115,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }
 
   const signOut = async () => {
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current)
-      inactivityTimerRef.current = null
-    }
-    if (user?.id) {
-      queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) })
-    }
-    setUser(null)
-    setError(null)
+    setLoading(true)
     try {
       await supabase.auth.signOut()
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const changePassword = async (newPassword: string, clearNeedsPasswordReset: boolean = false) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await authApi.updatePassword(newPassword, clearNeedsPasswordReset)
-      await refreshUser()
-      return result
-    } catch (err: any) {
-      setError(err.message || "Failed to change password")
-      throw err
+      setUser(null)
+    } catch (err) {
+      console.error("Sign out error:", err)
     } finally {
       setLoading(false)
     }
   }
 
-  const refreshUser = async () => {
-    if (!user) return
-    try {
-      const { data: { user: sessionUser }, error } = await supabase.auth.getUser()
-      if (error) return
-      if (sessionUser) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.userProfile(sessionUser.id) })
-        const profile = await queryClient.fetchQuery({
-          queryKey: queryKeys.userProfile(sessionUser.id),
-          queryFn: () => fetchUserProfile(sessionUser.id),
-          staleTime: Infinity,
-          gcTime: Infinity,
-        })
-        if (!profile?.is_active) {
-          setUser(null)
-          await supabase.auth.signOut()
-          return
-        }
-        setUser(profile)
-        clearPermissionCache()
-        resetInactivityTimer()
-      } else {
-        setUser(null)
-      }
-    } catch (err) {
-      console.error("Refresh user error:", err)
-      setError("Failed to refresh user profile. Using existing data.")
-    }
-  }
-
   const sendPasswordResetEmail = async (email: string) => {
     setLoading(true)
-    setError(null)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
+      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       })
       if (error) throw error
-    } catch (err: any) {
-      setError(err.message)
+      return data
+    } catch (err) {
+      console.error("Password reset error:", err)
       throw err
     } finally {
       setLoading(false)
@@ -265,16 +143,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      error,
-      signIn,
-      signOut,
-      refreshUser,
-      changePassword,
-      sendPasswordResetEmail
-    }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, sendPasswordResetEmail, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
@@ -282,6 +151,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
-  if (!context) throw new Error('useAuth must be used within AuthProvider')
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
   return context
 }
