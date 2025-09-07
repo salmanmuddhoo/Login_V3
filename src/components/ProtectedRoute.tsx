@@ -10,17 +10,12 @@ interface ProtectedRouteProps {
   redirectTo?: string
 }
 
-export function ProtectedRoute({ 
-  children, 
-  requireAdmin = false, 
-  requiredPermission,
-  redirectTo = '/login'
-}: ProtectedRouteProps) {
-  const { user, hasSession, loading } = useAuth()
+export function ProtectedRoute({ children, requireAdmin = false, requiredPermission, redirectTo = '/login' }: ProtectedRouteProps) {
+  const { user, loading, sessionLoaded } = useAuth()
   const location = useLocation()
 
-  // Show spinner while loading profile if session exists
-  if ((loading || !user) && hasSession) {
+  // Show spinner until session is loaded
+  if (!sessionLoaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -31,18 +26,15 @@ export function ProtectedRoute({
     )
   }
 
-  // Redirect to login if no session exists
-  if (!hasSession) {
+  if (!user) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
-  // Force password reset page if required
-  if (user?.needs_password_reset && location.pathname !== '/force-password-change') {
+  if (user.needs_password_reset && location.pathname !== '/force-password-change') {
     return <Navigate to="/force-password-change" replace />
   }
 
-  // Show inactive account message
-  if (user && !user.is_active) {
+  if (!user.is_active) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -53,13 +45,11 @@ export function ProtectedRoute({
     )
   }
 
-  // Admin access check
-  if (requireAdmin && user && !isAdmin(user)) {
+  if (requireAdmin && !isAdmin(user)) {
     return <Navigate to="/dashboard" replace />
   }
 
-  // Permission check
-  if (requiredPermission && user && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
+  if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -70,6 +60,5 @@ export function ProtectedRoute({
     )
   }
 
-  // Render children if all checks pass
   return <>{children}</>
 }
