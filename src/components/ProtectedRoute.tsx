@@ -19,8 +19,8 @@ export function ProtectedRoute({
   const { user, loading } = useAuth()
   const location = useLocation()
 
-  // Show spinner while AuthContext is resolving session
-  if (loading) {
+  // Only show loading spinner if we're actually loading (no cached data available)
+  if (loading && !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -31,17 +31,15 @@ export function ProtectedRoute({
     )
   }
 
-  // If no user after loading finished → redirect
   if (!user) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
-  // Force password reset
+  // Check if user needs to change their password
   if (user.needs_password_reset && location.pathname !== '/force-password-change') {
     return <Navigate to="/force-password-change" replace />
   }
 
-  // Inactive account
   if (!user.is_active) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -53,12 +51,10 @@ export function ProtectedRoute({
     )
   }
 
-  // Require admin
   if (requireAdmin && !isAdmin(user)) {
     return <Navigate to="/dashboard" replace />
   }
 
-  // Require specific permission
   if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
