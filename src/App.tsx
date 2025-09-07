@@ -17,7 +17,6 @@ const AdminUsers = React.lazy(() => import('./pages/AdminUsers').then(module => 
 const AdminRoles = React.lazy(() => import('./pages/AdminRoles').then(module => ({ default: module.AdminRoles })))
 const AdminPermissions = React.lazy(() => import('./pages/AdminPermissions').then(module => ({ default: module.AdminPermissions })))
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage })))
-const StaffReportsPage = React.lazy(() => import('./pages/StaffReportsPage').then(module => ({ default: module.StaffReportsPage })))
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -40,10 +39,8 @@ const AppLoadingFallback = () => (
 
 // Route loaders for data prefetching
 const dashboardLoader = async () => {
-  console.log('📊 App: Starting dashboardLoader...')
   try {
     // Prefetch dashboard data
-    console.log('📊 App: Fetching dashboard stats and activity...')
     const [stats, activity] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: queryKeys.dashboardStats(),
@@ -55,23 +52,16 @@ const dashboardLoader = async () => {
       }),
     ])
     
-    console.log('✅ App: Dashboard data loaded successfully:', {
-      statsCount: stats?.length || 0,
-      activityCount: activity?.length || 0
-    })
     return { stats, activity }
   } catch (error) {
-    console.error('❌ App: Dashboard loader failed:', error)
     // Return empty data on error - components will handle loading states
     return { stats: [], activity: [] }
   }
 }
 
 const adminUsersLoader = async () => {
-  console.log('👥 App: Starting adminUsersLoader...')
   try {
     // Prefetch users and roles data
-    console.log('👥 App: Fetching users and roles data...')
     const [usersData, roles] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: queryKeys.adminUsers(),
@@ -83,23 +73,16 @@ const adminUsersLoader = async () => {
       }),
     ])
     
-    console.log('✅ App: Admin users data loaded successfully:', {
-      usersCount: usersData?.users?.length || 0,
-      rolesCount: roles?.length || 0
-    })
     return { users: usersData.users, roles }
   } catch (error) {
-    console.error('❌ App: Admin users loader failed:', error)
     // Return empty data on error - components will handle loading states
     return { users: [], roles: [] }
   }
 }
 
 const adminRolesLoader = async () => {
-  console.log('🛡️ App: Starting adminRolesLoader...')
   try {
     // Prefetch roles and permissions data
-    console.log('🛡️ App: Fetching roles and permissions data...')
     const [roles, permissions] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: queryKeys.adminRoles(),
@@ -111,33 +94,22 @@ const adminRolesLoader = async () => {
       }),
     ])
     
-    console.log('✅ App: Admin roles data loaded successfully:', {
-      rolesCount: roles?.length || 0,
-      permissionsCount: permissions?.length || 0
-    })
     return { roles, permissions }
   } catch (error) {
-    console.error('❌ App: Admin roles loader failed:', error)
     return { roles: [], permissions: [] }
   }
 }
 
 const adminPermissionsLoader = async () => {
-  console.log('🔑 App: Starting adminPermissionsLoader...')
   try {
-    console.log('🔑 App: Fetching permissions data...')
     const permissions = await queryClient.fetchQuery({
       queryKey: queryKeys.adminPermissions(),
       queryFn: adminPermissionsApi.getPermissions,
       staleTime: 10 * 60 * 1000, // Cache permissions for 10 minutes
     })
     
-    console.log('✅ App: Admin permissions data loaded successfully:', {
-      permissionsCount: permissions?.length || 0
-    })
     return { permissions }
   } catch (error) {
-    console.error('❌ App: Admin permissions loader failed:', error)
     return { permissions: [] }
   }
 }
@@ -248,7 +220,10 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'reports', action: 'view' }}>
             <Suspense fallback={<PageLoadingFallback />}>
-              <StaffReportsPage />
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-900">Reports</h2>
+                <p className="text-gray-600 mt-2">Coming soon...</p>
+              </div>
             </Suspense>
           </ProtectedRoute>
         ),

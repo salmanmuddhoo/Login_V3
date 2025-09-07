@@ -11,39 +11,20 @@ export class ApiError extends Error {
 }
 
 async function handleResponse(response: Response) {
-  console.log('🌐 API: Handling response:', {
-    status: response.status,
-    statusText: response.statusText,
-    url: response.url,
-    ok: response.ok
-  })
-  
   const data = await response.json()
   
   if (!response.ok) {
-    console.error('❌ API: Request failed:', {
-      status: response.status,
-      error: data.error || 'Request failed',
-      url: response.url
-    })
     throw new ApiError(response.status, data.error || 'Request failed')
   }
   
-  console.log('✅ API: Request successful:', {
-    status: response.status,
-    dataKeys: Object.keys(data || {}),
-    url: response.url
-  })
   return data
 }
 
 // User Profile Data Fetching
 export const userProfileApi = {
   async fetchUserProfile(userId: string): Promise<any | null> {
-    console.log('👤 UserProfile: Starting fetchUserProfile for:', userId)
     try {
       // Optimized query with proper joins for complete user data
-      console.log('👤 UserProfile: Executing Supabase query...')
       const { data, error } = await supabase
         .from('users')
         .select(`
@@ -77,21 +58,12 @@ export const userProfileApi = {
         .single()
 
       if (error) {
-        console.error('❌ UserProfile: Supabase query error:', error)
         throw error
       }
       
       if (!data) {
-        console.error('❌ UserProfile: No user data found for:', userId)
         throw new Error('User profile not found')
       }
-      
-      console.log('📊 UserProfile: Raw data received:', {
-        userId: data.id,
-        email: data.email,
-        isActive: data.is_active,
-        userRolesCount: data.user_roles?.length || 0
-      })
       
       // Transform the data to match our User interface
       const roles = data.user_roles?.map(ur => ur.roles).filter(Boolean) || []
@@ -113,17 +85,8 @@ export const userProfileApi = {
         permissions: uniquePermissions
       }
       
-      console.log('✅ UserProfile: User profile transformed successfully:', {
-        userId: transformedUser.id,
-        rolesCount: transformedUser.roles.length,
-        permissionsCount: transformedUser.permissions.length,
-        isActive: transformedUser.is_active,
-        needsPasswordReset: transformedUser.needs_password_reset
-      })
-      
       return transformedUser
     } catch (err) {
-      console.error('❌ UserProfile: fetchUserProfile failed:', err)
       throw err
     }
   },
@@ -426,19 +389,6 @@ export const authApi = {
     
     const result = await handleResponse(response)
     return result
-  }
-}
-
-// Helper function to get auth headers for API calls
-export const getAuthHeaders = async () => {
-  console.log('🔑 Auth: Getting auth headers...')
-  const token = await getAccessToken()
-  console.log('🔑 Auth: Access token status:', token ? 'Present' : 'Missing')
-  if (!token) throw new Error('No active session. Please log in again.')
-
-  return {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
   }
 }
 
