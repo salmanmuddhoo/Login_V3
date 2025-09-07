@@ -89,9 +89,10 @@ const adminPermissionsLoader = async () => {
 
 // Router configuration
 const AppRouter = () => {
-  const { sessionLoaded } = useAuth()
+  const { sessionLoaded, loading } = useAuth()
 
-  if (!sessionLoaded) {
+  // Show spinner until session is loaded OR if auth is still loading
+  if (!sessionLoaded || loading) {
     return <AppLoadingFallback />
   }
 
