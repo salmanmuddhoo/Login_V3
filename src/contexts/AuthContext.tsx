@@ -30,6 +30,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [sessionLoaded, setSessionLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const initializingRef = useRef(false) // Prevent race conditions
 
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current)
@@ -52,61 +53,64 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return userProfileApi.fetchUserProfile(userId)
   }
 
+  const handleAuthStateChange = async (session: any) => {
+    try {
+      if (session?.user) {
+        const profile = await queryClient.fetchQuery({
+          queryKey: queryKeys.userProfile(session.user.id),
+          queryFn: () => fetchUserProfile(session.user.id),
+          staleTime: Infinity,
+        })
+
+        if (!profile?.is_active) {
+          await supabase.auth.signOut()
+          setUser(null)
+        } else {
+          setUser(profile)
+        }
+      } else {
+        setUser(null)
+      }
+    } catch (err) {
+      console.error('Auth state change error:', err)
+      setUser(null)
+    }
+  }
+
   // Load session on app start
   useEffect(() => {
     const init = async () => {
+      if (initializingRef.current) return // Prevent multiple initializations
+      initializingRef.current = true
+      
       setLoading(true)
+      setSessionLoaded(false)
+      
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
 
-        if (session?.user) {
-          const profile = await queryClient.fetchQuery({
-            queryKey: queryKeys.userProfile(session.user.id),
-            queryFn: () => fetchUserProfile(session.user.id),
-            staleTime: Infinity,
-          })
-
-          if (!profile?.is_active) {
-            await supabase.auth.signOut()
-            setUser(null)
-          } else {
-            setUser(profile)
-          }
-        } else {
-          setUser(null)
-        }
+        await handleAuthStateChange(session)
       } catch (err) {
+        console.error('Session initialization error:', err)
         setUser(null)
       } finally {
         setLoading(false)
-        setSessionLoaded(true) // Important: mark session as loaded
+        setSessionLoaded(true)
+        initializingRef.current = false
       }
     }
 
     init()
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Don't handle auth changes during initial setup
+      if (initializingRef.current) return
+      
       try {
-        if (session?.user) {
-          const profile = await queryClient.fetchQuery({
-            queryKey: queryKeys.userProfile(session.user.id),
-            queryFn: () => fetchUserProfile(session.user.id),
-            staleTime: Infinity,
-          })
-
-          if (!profile?.is_active) {
-            await supabase.auth.signOut()
-            setUser(null)
-          } else {
-            setUser(profile)
-          }
-        } else {
-          setUser(null)
-        }
-      } catch {}
-      finally {
-        setSessionLoaded(true)
+        await handleAuthStateChange(session)
+      } catch (err) {
+        console.error('Auth state change error:', err)
       }
     })
 
