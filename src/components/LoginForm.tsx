@@ -6,8 +6,7 @@ import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react'
 export function LoginForm() {
   const [credentials, setCredentials] = useState({ email: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const { signIn, error, user } = useAuth()
+  const { signIn, error, user, isSigningIn, clearError } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -15,22 +14,20 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    clearError() // Clear any previous errors
 
     try {
       await signIn(credentials.email, credentials.password)
-      
       // The signIn function in AuthContext will automatically set the user
       // We'll handle navigation in a useEffect that watches for user changes
     } catch (error) {
-    } finally {
-      setIsLoading(false)
+      // Error is handled by AuthContext
     }
   }
 
   // Handle navigation after successful login
   React.useEffect(() => {
-    if (user && !isLoading) {
+    if (user && !isSigningIn) {
       if (user.needs_password_reset) {
         navigate('/force-password-change', { replace: true })
       } else if (user.roles?.some(role => role.name === 'admin')) {
@@ -39,7 +36,7 @@ export function LoginForm() {
         navigate('/dashboard', { replace: true })
       }
     }
-  }, [user, isLoading, navigate])
+  }, [user, isSigningIn, navigate])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -129,10 +126,10 @@ export function LoginForm() {
           <div>
             <button
               type="submit"
-              disabled={isLoading || !credentials.email || !credentials.password}
+              disabled={isSigningIn || !credentials.email || !credentials.password}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
-              {isLoading ? (
+              {isSigningIn ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Signing in...

@@ -3,7 +3,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const ChangePasswordForm: React.FC = () => {
-  const { changePassword, signOut, loading: authLoading } = useAuth()
+  const { changePassword, signOut, isRefreshing } = useAuth()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -81,10 +81,10 @@ const ChangePasswordForm: React.FC = () => {
 
       <button
         type="submit"
-        disabled={isLoading || authLoading || !newPassword || !confirmPassword}
+        disabled={isLoading || isRefreshing || !newPassword || !confirmPassword}
         className="w-full py-2 px-4 bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        {isLoading || authLoading ? 'Updating password...' : 'Update Password'}
+        {isLoading || isRefreshing ? 'Updating password...' : 'Update Password'}
       </button>
     </form>
   )

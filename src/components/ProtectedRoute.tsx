@@ -16,12 +16,13 @@ export function ProtectedRoute({
   requiredPermission,
   redirectTo = '/login'
 }: ProtectedRouteProps) {
-  const { user, loading, initializing } = useAuth()
+  const { user, isInitializing, isSigningIn, isSigningOut, isRefreshing } = useAuth()
   const location = useLocation()
 
-  console.log('[ProtectedRoute] loading:', loading, 'user:', user, 'initializing:', initializing, 'path:', location.pathname)
+  const isLoading = isInitializing || isSigningIn || isSigningOut || isRefreshing
+  console.log('[ProtectedRoute] isLoading:', isLoading, 'user:', user, 'isInitializing:', isInitializing, 'path:', location.pathname)
 
-  if ((loading && user) || initializing) {
+  if (isInitializing || (isLoading && user)) {
     console.log('[ProtectedRoute] Showing spinner...')
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">

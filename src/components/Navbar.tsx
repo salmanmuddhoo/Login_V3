@@ -4,15 +4,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { LogOut, User, Shield } from 'lucide-react'
 
 export function Navbar() {
-  const { user, signOut } = useAuth()
-  const [isSigningOut, setIsSigningOut] = useState(false)
+  const { user, signOut, isSigningOut } = useAuth()
 
   const handleSignOut = async () => {
-    setIsSigningOut(true)
     try {
       await signOut()
     } catch (error) {
-    } finally {
+      console.error('Sign out error:', error)
     }
   }
 
