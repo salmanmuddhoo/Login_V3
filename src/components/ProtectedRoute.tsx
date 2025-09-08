@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { hasPermission, isAdmin } from '../utils/permissions'
@@ -10,30 +10,19 @@ interface ProtectedRouteProps {
   redirectTo?: string
 }
 
-export function ProtectedRoute({ 
-  children, 
-  requireAdmin = false, 
+export function ProtectedRoute({
+  children,
+  requireAdmin = false,
   requiredPermission,
   redirectTo = '/login'
 }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, initializing } = useAuth()
   const location = useLocation()
-  const [internalLoading, setInternalLoading] = useState(true)
 
-  // Debug logs
-  console.log('[ProtectedRoute] loading:', loading, 'user:', user, 'path:', location.pathname)
+  console.log('[ProtectedRoute] loading:', loading, 'user:', user, 'initializing:', initializing, 'path:', location.pathname)
 
-  // Show spinner if still loading user info
-  useEffect(() => {
-    if (!loading && user !== null) {
-      setInternalLoading(false)
-    } else if (loading && user === null) {
-      setInternalLoading(true)
-      console.log('[ProtectedRoute] Still loading user, showing spinner...')
-    }
-  }, [loading, user])
-
-  if (internalLoading) {
+  if ((loading && user) || initializing) {
+    console.log('[ProtectedRoute] Showing spinner...')
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -50,7 +39,6 @@ export function ProtectedRoute({
   }
 
   if (user.needs_password_reset && location.pathname !== '/force-password-change') {
-    console.log('[ProtectedRoute] User needs password reset, redirecting...')
     return <Navigate to="/force-password-change" replace />
   }
 
@@ -66,12 +54,10 @@ export function ProtectedRoute({
   }
 
   if (requireAdmin && !isAdmin(user)) {
-    console.log('[ProtectedRoute] Require admin but user is not admin, redirecting...')
     return <Navigate to="/dashboard" replace />
   }
 
   if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
-    console.log('[ProtectedRoute] User missing permission:', requiredPermission)
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
