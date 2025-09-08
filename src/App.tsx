@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { queryClient, queryKeys } from './lib/queryClient'
-import { dashboardApi, adminUsersApi, rolesApi } from './lib/dataFetching'
+import { dashboardApi, adminUsersApi, rolesApi, adminRolesApi, adminPermissionsApi } from './lib/dataFetching'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
@@ -10,7 +10,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { ForcePasswordChangePage } from './pages/ForcePasswordChangePage'
 
-// Lazy load page components for better performance
+// Lazy load page components
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })))
 const AdminUsers = React.lazy(() => import('./pages/AdminUsers').then(module => ({ default: module.AdminUsers })))
@@ -18,7 +18,7 @@ const AdminRoles = React.lazy(() => import('./pages/AdminRoles').then(module => 
 const AdminPermissions = React.lazy(() => import('./pages/AdminPermissions').then(module => ({ default: module.AdminPermissions })))
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage })))
 
-// Loading fallback component
+// Loading fallback components
 const PageLoadingFallback = () => (
   <div className="flex items-center justify-center py-12">
     <div className="text-center">
@@ -32,15 +32,15 @@ const AppLoadingFallback = () => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center">
     <div className="text-center">
       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-      <p className="text-gray-600">Loading...</p>
+      <p className="text-gray-600">Loading app...</p>
     </div>
   </div>
 )
 
-// Route loaders for data prefetching
+// --- Route loaders with logging ---
 const dashboardLoader = async () => {
+  console.log("[Loader] dashboardLoader called")
   try {
-    // Prefetch dashboard data
     const [stats, activity] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: queryKeys.dashboardStats(),
@@ -51,17 +51,17 @@ const dashboardLoader = async () => {
         queryFn: dashboardApi.getRecentActivity,
       }),
     ])
-    
+    console.log("[Loader] dashboardLoader success", { stats, activity })
     return { stats, activity }
   } catch (error) {
-    // Return empty data on error - components will handle loading states
+    console.error("[Loader] dashboardLoader error:", error)
     return { stats: [], activity: [] }
   }
 }
 
 const adminUsersLoader = async () => {
+  console.log("[Loader] adminUsersLoader called")
   try {
-    // Prefetch users and roles data
     const [usersData, roles] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: queryKeys.adminUsers(),
@@ -72,17 +72,17 @@ const adminUsersLoader = async () => {
         queryFn: rolesApi.getRoles,
       }),
     ])
-    
+    console.log("[Loader] adminUsersLoader success")
     return { users: usersData.users, roles }
   } catch (error) {
-    // Return empty data on error - components will handle loading states
+    console.error("[Loader] adminUsersLoader error:", error)
     return { users: [], roles: [] }
   }
 }
 
 const adminRolesLoader = async () => {
+  console.log("[Loader] adminRolesLoader called")
   try {
-    // Prefetch roles and permissions data
     const [roles, permissions] = await Promise.all([
       queryClient.fetchQuery({
         queryKey: queryKeys.adminRoles(),
@@ -93,45 +93,36 @@ const adminRolesLoader = async () => {
         queryFn: adminPermissionsApi.getPermissions,
       }),
     ])
-    
+    console.log("[Loader] adminRolesLoader success")
     return { roles, permissions }
   } catch (error) {
+    console.error("[Loader] adminRolesLoader error:", error)
     return { roles: [], permissions: [] }
   }
 }
 
 const adminPermissionsLoader = async () => {
+  console.log("[Loader] adminPermissionsLoader called")
   try {
     const permissions = await queryClient.fetchQuery({
       queryKey: queryKeys.adminPermissions(),
       queryFn: adminPermissionsApi.getPermissions,
-      staleTime: 10 * 60 * 1000, // Cache permissions for 10 minutes
+      staleTime: 10 * 60 * 1000,
     })
-    
+    console.log("[Loader] adminPermissionsLoader success")
     return { permissions }
   } catch (error) {
+    console.error("[Loader] adminPermissionsLoader error:", error)
     return { permissions: [] }
   }
 }
 
-// Router configuration with loaders
+// --- Router config ---
 const router = createBrowserRouter([
-  {
-    path: '/login',
-    element: <LoginForm />,
-  },
-  {
-    path: '/forgot-password',
-    element: <ForgotPasswordPage />,
-  },
-  {
-    path: '/reset-password',
-    element: <ResetPasswordPage />,
-  },
-  {
-    path: '/force-password-change',
-    element: <ForcePasswordChangePage />,
-  },
+  { path: '/login', element: <LoginForm /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
+  { path: '/force-password-change', element: <ForcePasswordChangePage /> },
   {
     path: '/',
     element: (
@@ -141,10 +132,7 @@ const router = createBrowserRouter([
     ),
     hydrateFallbackElement: <AppLoadingFallback />,
     children: [
-      {
-        index: true,
-        element: <Navigate to="/dashboard" replace />,
-      },
+      { index: true, element: <Navigate to="/dashboard" replace /> },
       {
         path: 'dashboard',
         element: (
@@ -271,10 +259,7 @@ const router = createBrowserRouter([
       },
     ],
   },
-  {
-    path: '*',
-    element: <Navigate to="/dashboard" replace />,
-  },
+  { path: '*', element: <Navigate to="/dashboard" replace /> },
 ], {
   future: {
     v7_partialHydration: true,
@@ -282,9 +267,10 @@ const router = createBrowserRouter([
 })
 
 function App() {
+  console.log("[App] Mounting application...")
   return (
     <AuthProvider>
-      <RouterProvider router={router} />
+      <RouterProvider router={router} fallbackElement={<AppLoadingFallback />} />
     </AuthProvider>
   )
 }
