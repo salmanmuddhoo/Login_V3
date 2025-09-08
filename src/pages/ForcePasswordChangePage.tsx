@@ -6,7 +6,7 @@ import { Shield, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
 
 export function ForcePasswordChangePage() {
   const navigate = useNavigate()
-  const { user, changePassword, signOut, isInitializing, isRefreshing } = useAuth()
+  const { user, changePassword, signOut, loading: authLoading } = useAuth()
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -22,10 +22,10 @@ export function ForcePasswordChangePage() {
 
   useEffect(() => {
     // If user is not logged in or doesn't need password reset, redirect
-    if (!isInitializing && (!user || !user.needs_password_reset)) {
+    if (!authLoading && (!user || !user.needs_password_reset)) {
       navigate('/dashboard', { replace: true })
     }
-  }, [user, isInitializing, navigate])
+  }, [user, authLoading, navigate])
 
   useEffect(() => {
     if (password) {
@@ -83,7 +83,7 @@ export function ForcePasswordChangePage() {
     }
   }
 
-  if (isInitializing || !user || !user.needs_password_reset) {
+  if (authLoading || !user || !user.needs_password_reset) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600"></div>
@@ -195,10 +195,10 @@ export function ForcePasswordChangePage() {
           <div>
             <button
               type="submit"
-              disabled={isLoading || isRefreshing || !password || !confirmPassword || !passwordValidation?.isValid}
+              disabled={isLoading || authLoading || !password || !confirmPassword || !passwordValidation?.isValid}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
-              {isLoading || isRefreshing ? (
+              {isLoading || authLoading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Changing password...

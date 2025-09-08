@@ -12,37 +12,26 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 /**
  * Get the current access token safely.
- * Enhanced with better error handling and retry logic.
+ * If the session is expired or missing, returns null instead of throwing.
  */
 export const getAccessToken = async (): Promise<string | null> => {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession()
-    
-    if (error) {
-      console.error('[Supabase] Error getting session:', error)
-      return null
-    }
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-    if (session?.access_token) {
-      return session.access_token
-    }
+    if (session?.access_token) return session.access_token
 
     return null
-  } catch (error) {
-    console.error('[Supabase] Exception getting access token:', error)
+  } catch (err) {
     return null
   }
 }
 
-/**
- * Helper function to get auth headers for API calls with enhanced error handling
- */
+// Helper function to get auth headers for API calls
 export const getAuthHeaders = async () => {
   const token = await getAccessToken()
-  
-  if (!token) {
-    throw new Error('No active session. Please log in again.')
-  }
+  if (!token) throw new Error('No active session. Please log in again.')
 
   return {
     Authorization: `Bearer ${token}`,
