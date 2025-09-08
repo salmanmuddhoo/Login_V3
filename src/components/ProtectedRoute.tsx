@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { hasPermission, isAdmin } from '../utils/permissions'
@@ -10,20 +10,41 @@ interface ProtectedRouteProps {
   redirectTo?: string
 }
 
-export function ProtectedRoute({ 
-  children, 
-  requireAdmin = false, 
+export function ProtectedRoute({
+  children,
+  requireAdmin = false,
   requiredPermission,
   redirectTo = '/login'
 }: ProtectedRouteProps) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
-  console.log("[ProtectedRoute] loading:", loading, "user:", user, "path:", location.pathname)
+  const [initialized, setInitialized] = useState(false)
+  const [localUser, setLocalUser] = useState<any | null>(null)
 
-  // Show spinner ONLY while loading and we don't know user yet
-  if (loading && !user) {
-    console.log("[ProtectedRoute] Showing spinner...")
+  // ✅ On first render, use cached user from AuthContext or localStorage
+  useEffect(() => {
+    if (user) {
+      setLocalUser(user)
+      setInitialized(true)
+    } else {
+      const cached = localStorage.getItem('cachedUserProfile')
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          setLocalUser(parsed)
+          console.log("✅ Using cached user in ProtectedRoute:", parsed)
+        } catch {
+          console.warn("⚠️ Failed to parse cached user in ProtectedRoute")
+          setLocalUser(null)
+        }
+      }
+      setInitialized(true)
+    }
+  }, [user])
+
+  // Only show loading spinner if still loading and no cached data
+  if ((loading || !initialized) && !localUser) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -34,20 +55,16 @@ export function ProtectedRoute({
     )
   }
 
-  // If finished loading and no user → redirect
-  if (!loading && !user) {
-    console.log("[ProtectedRoute] No user, redirecting to:", redirectTo)
+  if (!localUser) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
-  // ✅ From here, we know we have a user
-  if (user?.needs_password_reset && location.pathname !== '/force-password-change') {
-    console.log("[ProtectedRoute] User needs password reset, redirecting...")
+  // Check if user needs to change their password
+  if (localUser.needs_password_reset && location.pathname !== '/force-password-change') {
     return <Navigate to="/force-password-change" replace />
   }
 
-  if (!user?.is_active) {
-    console.log("[ProtectedRoute] User inactive, blocking access.")
+  if (!localUser.is_active) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -58,13 +75,11 @@ export function ProtectedRoute({
     )
   }
 
-  if (requireAdmin && !isAdmin(user)) {
-    console.log("[ProtectedRoute] User is not admin, redirecting to dashboard.")
+  if (requireAdmin && !isAdmin(localUser)) {
     return <Navigate to="/dashboard" replace />
   }
 
-  if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
-    console.log("[ProtectedRoute] User lacks permission:", requiredPermission)
+  if (requiredPermission && !hasPermission(localUser, requiredPermission.resource, requiredPermission.action)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -75,6 +90,5 @@ export function ProtectedRoute({
     )
   }
 
-  console.log("[ProtectedRoute] Access granted.")
   return <>{children}</>
 }
