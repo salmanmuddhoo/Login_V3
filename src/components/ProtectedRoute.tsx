@@ -16,11 +16,12 @@ export function ProtectedRoute({
   requiredPermission,
   redirectTo = '/login'
 }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, refreshUser } = useAuth()
   const location = useLocation()
 
   const [initialized, setInitialized] = useState(false)
   const [localUser, setLocalUser] = useState<any | null>(null)
+  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false)
 
   // ✅ On first render, use cached user from AuthContext or localStorage
   useEffect(() => {
@@ -43,7 +44,22 @@ export function ProtectedRoute({
     }
   }, [user])
 
-  // Only show loading spinner if still loading and no cached data
+  // ✅ Background refresh: fetch latest profile if cached user exists
+  useEffect(() => {
+    if (localUser) {
+      setBackgroundRefreshing(true)
+      refreshUser()
+        .then(() => {
+          console.log("🔄 Background user refresh completed")
+        })
+        .catch(err => {
+          console.warn("⚠️ Background refresh failed:", err)
+        })
+        .finally(() => setBackgroundRefreshing(false))
+    }
+  }, [localUser, refreshUser])
+
+  // Only show spinner if no cached user and still loading
   if ((loading || !initialized) && !localUser) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
