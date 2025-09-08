@@ -1,80 +1,76 @@
-import React from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { hasPermission, isAdmin } from '../utils/permissions'
+// ProtectedRoute.tsx
+import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+
+type Permission = {
+  resource: string;
+  action: string;
+};
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
-  requireAdmin?: boolean
-  requiredPermission?: { resource: string; action: string }
-  redirectTo?: string
+  children: React.ReactNode;
+  requiredPermission?: Permission;
+  requireAdmin?: boolean;
 }
 
-export function ProtectedRoute({ 
-  children, 
-  requireAdmin = false, 
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
   requiredPermission,
-  redirectTo = '/login'
-}: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
-  const location = useLocation()
+  requireAdmin = false,
+}) => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-  console.log("[ProtectedRoute] loading:", loading, "user:", user, "path:", location.pathname)
+  console.log(
+    "[ProtectedRoute] loading:",
+    loading,
+    "user:",
+    user,
+    "path:",
+    location.pathname
+  );
 
-  // Show spinner ONLY while loading and we don't know user yet
-  if (loading && !user) {
-    console.log("[ProtectedRoute] Showing spinner...")
+  // ✅ Show spinner only while AuthProvider is checking Supabase session
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-2"></div>
+          <p className="text-gray-600 text-sm">Checking authentication...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  // If finished loading and no user → redirect
-  if (!loading && !user) {
-    console.log("[ProtectedRoute] No user, redirecting to:", redirectTo)
-    return <Navigate to={redirectTo} state={{ from: location }} replace />
+  // 🚫 Not authenticated → redirect to login
+  if (!user) {
+    console.log("[ProtectedRoute] No user → redirecting to /login");
+    return <Navigate to="/login" replace />;
   }
 
-  // ✅ From here, we know we have a user
-  if (user?.needs_password_reset && location.pathname !== '/force-password-change') {
-    console.log("[ProtectedRoute] User needs password reset, redirecting...")
-    return <Navigate to="/force-password-change" replace />
+  // 🔐 If requireAdmin, check user's role
+  if (requireAdmin && user.role !== "admin") {
+    console.warn("[ProtectedRoute] User not admin → redirecting to /dashboard");
+    return <Navigate to="/dashboard" replace />;
   }
 
-  if (!user?.is_active) {
-    console.log("[ProtectedRoute] User inactive, blocking access.")
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Account Inactive</h2>
-          <p className="text-gray-600">Your account has been deactivated. Please contact an administrator.</p>
-        </div>
-      </div>
-    )
+  // 🔐 If specific permission is required, check user's permissions
+  if (requiredPermission) {
+    const hasPermission = user.permissions?.some(
+      (p: Permission) =>
+        p.resource === requiredPermission.resource &&
+        p.action === requiredPermission.action
+    );
+
+    if (!hasPermission) {
+      console.warn(
+        `[ProtectedRoute] Missing permission ${requiredPermission.resource}:${requiredPermission.action} → redirecting to /dashboard`
+      );
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
-  if (requireAdmin && !isAdmin(user)) {
-    console.log("[ProtectedRoute] User is not admin, redirecting to dashboard.")
-    return <Navigate to="/dashboard" replace />
-  }
-
-  if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
-    console.log("[ProtectedRoute] User lacks permission:", requiredPermission)
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600">You don't have permission to access this resource.</p>
-        </div>
-      </div>
-    )
-  }
-
-  console.log("[ProtectedRoute] Access granted.")
-  return <>{children}</>
-}
+  // ✅ User authenticated and allowed → render children
+  return <>{children}</>;
+};
