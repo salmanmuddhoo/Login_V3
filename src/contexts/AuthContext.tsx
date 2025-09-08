@@ -1,14 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { authApi, userProfileApi } from '../lib/dataFetching'
 import { queryClient, queryKeys } from '../lib/queryClient'
 import { clearPermissionCache } from '../utils/permissions'
 
+// Inactivity timeout: 15 minutes
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
 
 interface AuthContextType {
   user: any | null
   loading: boolean
+  initializing: boolean
   error: string | null
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -25,7 +27,8 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<any | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [initializing, setInitializing] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -33,7 +36,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current)
     if (user) {
       inactivityTimerRef.current = setTimeout(() => {
-        console.log('[AuthContext] User inactive 15min, signing out...')
+        console.log('User inactive for 15 minutes, logging out...')
         signOut()
       }, INACTIVITY_TIMEOUT_MS)
     }
@@ -42,91 +45,89 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     if (user) {
       resetInactivityTimer()
-      const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
-      events.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }))
+      const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
+      activityEvents.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }))
       return () => {
         if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current)
-        events.forEach(e => window.removeEventListener(e, resetInactivityTimer))
+        activityEvents.forEach(e => window.removeEventListener(e, resetInactivityTimer))
       }
     }
   }, [user, resetInactivityTimer])
 
   const fetchUserProfile = async (userId: string) => {
+    console.log(`[AuthContext] 🔍 Fetching user profile for: ${userId}`)
     try {
-      console.log('[AuthContext] Fetching user profile for:', userId)
       const profile = await userProfileApi.fetchUserProfile(userId)
-      console.log('[AuthContext] Profile fetched:', profile)
+      console.log('[AuthContext] ✅ Profile fetched', profile)
       return profile
     } catch (err) {
-      console.error('[AuthContext] Error fetching profile:', err)
+      console.error('[AuthContext] ❌ Failed to fetch profile', err)
       throw err
     }
   }
 
-  const initAuth = async () => {
-    console.log('[AuthContext] 🚀 Auth init starting...')
-    setLoading(true)
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) {
-        console.error('[AuthContext] Error getting session:', sessionError)
-        setUser(null)
-        await supabase.auth.signOut()
-        return
-      }
-      console.log('[AuthContext] 📦 Initial session:', session)
-
-      if (session?.user) {
-        const profile = await fetchUserProfile(session.user.id)
-        if (!profile?.is_active) {
-          console.log('[AuthContext] Account inactive, signing out...')
-          setUser(null)
-          await supabase.auth.signOut()
-        } else {
-          setUser(profile)
-        }
-      } else {
-        setUser(null)
-        await supabase.auth.signOut()
-      }
-    } catch (err) {
-      console.error('[AuthContext] Error initializing auth:', err)
-      setUser(null)
-      await supabase.auth.signOut()
-    } finally {
-      setLoading(false)
-      console.log('[AuthContext] Auth init complete. user:', user)
-    }
-  }
-
+  // INIT AUTH SESSION
   useEffect(() => {
-    initAuth()
+    const init = async () => {
+      console.log('[AuthContext] 🚀 Auth init starting...')
+      setLoading(true)
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        console.log('[AuthContext] 📦 Initial session:', session)
+
+        if (sessionError) {
+          console.error('[AuthContext] ❌ Session error', sessionError)
+          await supabase.auth.signOut()
+          setUser(null)
+          return
+        }
+
+        if (session?.user) {
+          const profile = await fetchUserProfile(session.user.id)
+          if (profile?.is_active) {
+            setUser(profile)
+          } else {
+            console.warn('[AuthContext] ⚠️ Inactive account, signing out')
+            await supabase.auth.signOut()
+            setUser(null)
+          }
+        } else {
+          setUser(null)
+        }
+      } catch (err) {
+        console.error('[AuthContext] ❌ Init failed', err)
+        await supabase.auth.signOut()
+        setUser(null)
+      } finally {
+        setLoading(false)
+        setInitializing(false)
+      }
+    }
+
+    init()
+
     const { data: subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[AuthContext] 🔄 Auth state change:', event, session)
-      if (session?.user) {
-        try {
+      try {
+        if (session?.user) {
           const profile = await fetchUserProfile(session.user.id)
-          if (!profile?.is_active) {
-            console.log('[AuthContext] Account inactive after auth change, signing out...')
-            setUser(null)
+          if (profile?.is_active) setUser(profile)
+          else {
             await supabase.auth.signOut()
-          } else {
-            setUser(profile)
+            setUser(null)
           }
-        } catch (err) {
-          console.error('[AuthContext] Failed to fetch profile on auth change:', err)
+        } else {
+          if (user?.id) queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) })
           setUser(null)
-        } finally {
-          setLoading(false)
         }
-      } else {
-        console.log('[AuthContext] Signed out, clearing user')
-        if (user?.id) queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) })
-        setUser(null)
-        setLoading(false)
+      } catch (err) {
+        console.error('[AuthContext] ❌ Auth state change error', err)
       }
     })
-    return () => subscription.subscription.unsubscribe()
+
+    return () => {
+      subscription.subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
@@ -144,7 +145,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(profile)
       }
     } catch (err: any) {
-      console.error('[AuthContext] SignIn error:', err)
+      console.error('[AuthContext] ❌ SignIn failed', err)
       setError(err.message)
       throw err
     } finally {
@@ -157,22 +158,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (user?.id) queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) })
     setUser(null)
     setError(null)
-    try { await supabase.auth.signOut() } catch {}
-  }
-
-  const changePassword = async (newPassword: string, clearNeedsPasswordReset = false) => {
-    setLoading(true)
-    setError(null)
     try {
-      const result = await authApi.updatePassword(newPassword, clearNeedsPasswordReset)
-      await refreshUser()
-      return result
-    } catch (err: any) {
-      console.error('[AuthContext] ChangePassword error:', err)
-      setError(err.message || 'Failed to change password')
-      throw err
-    } finally {
-      setLoading(false)
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('[AuthContext] ❌ SignOut error', err)
     }
   }
 
@@ -180,19 +169,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) return
     try {
       const { data: { user: sessionUser }, error } = await supabase.auth.getUser()
-      if (error || !sessionUser) return
-      queryClient.invalidateQueries({ queryKey: queryKeys.userProfile(sessionUser.id) })
-      const profile = await fetchUserProfile(sessionUser.id)
-      if (!profile?.is_active) {
-        setUser(null)
-        await supabase.auth.signOut()
-        return
-      }
-      setUser(profile)
-      clearPermissionCache()
-      resetInactivityTimer()
+      if (error) throw error
+      if (sessionUser) {
+        const profile = await fetchUserProfile(sessionUser.id)
+        if (!profile?.is_active) {
+          await supabase.auth.signOut()
+          setUser(null)
+          return
+        }
+        setUser(profile)
+        clearPermissionCache()
+        resetInactivityTimer()
+      } else setUser(null)
     } catch (err) {
-      console.error('[AuthContext] refreshUser error:', err)
+      console.error('[AuthContext] ❌ Refresh user failed', err)
+    }
+  }
+
+  const changePassword = async (newPassword: string, clearNeedsPasswordReset: boolean = false) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await authApi.updatePassword(newPassword, clearNeedsPasswordReset)
+      await refreshUser()
+      return result
+    } catch (err: any) {
+      console.error('[AuthContext] ❌ Change password failed', err)
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -200,12 +206,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true)
     setError(null)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
-      })
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` })
       if (error) throw error
     } catch (err: any) {
-      console.error('[AuthContext] sendPasswordResetEmail error:', err)
+      console.error('[AuthContext] ❌ Send reset email failed', err)
       setError(err.message)
       throw err
     } finally {
@@ -217,6 +221,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     <AuthContext.Provider value={{
       user,
       loading,
+      initializing,
       error,
       signIn,
       signOut,
