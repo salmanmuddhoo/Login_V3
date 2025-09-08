@@ -19,8 +19,11 @@ export function ProtectedRoute({
   const { user, loading } = useAuth()
   const location = useLocation()
 
-  // Only show loading spinner if we're actually loading (no cached data available)
+  console.log("[ProtectedRoute] loading:", loading, "user:", user, "path:", location.pathname)
+
+  // Show spinner ONLY while loading and we don't know user yet
   if (loading && !user) {
+    console.log("[ProtectedRoute] Showing spinner...")
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -31,16 +34,20 @@ export function ProtectedRoute({
     )
   }
 
-  if (!user) {
+  // If finished loading and no user → redirect
+  if (!loading && !user) {
+    console.log("[ProtectedRoute] No user, redirecting to:", redirectTo)
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
-  // Check if user needs to change their password
-  if (user.needs_password_reset && location.pathname !== '/force-password-change') {
+  // ✅ From here, we know we have a user
+  if (user?.needs_password_reset && location.pathname !== '/force-password-change') {
+    console.log("[ProtectedRoute] User needs password reset, redirecting...")
     return <Navigate to="/force-password-change" replace />
   }
 
-  if (!user.is_active) {
+  if (!user?.is_active) {
+    console.log("[ProtectedRoute] User inactive, blocking access.")
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -52,10 +59,12 @@ export function ProtectedRoute({
   }
 
   if (requireAdmin && !isAdmin(user)) {
+    console.log("[ProtectedRoute] User is not admin, redirecting to dashboard.")
     return <Navigate to="/dashboard" replace />
   }
 
   if (requiredPermission && !hasPermission(user, requiredPermission.resource, requiredPermission.action)) {
+    console.log("[ProtectedRoute] User lacks permission:", requiredPermission)
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
@@ -66,5 +75,6 @@ export function ProtectedRoute({
     )
   }
 
+  console.log("[ProtectedRoute] Access granted.")
   return <>{children}</>
 }
