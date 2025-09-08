@@ -7,6 +7,7 @@ import { clearPermissionCache } from '../utils/permissions'
 
 // Inactivity timeout: 15 minutes
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
+const LOCAL_STORAGE_KEY = "cachedUserProfile"
 
 interface AuthContextType {
   user: any | null
@@ -30,6 +31,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // ✅ Load cached profile immediately on mount
+  useEffect(() => {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY)
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached)
+        setUser(parsed)
+        console.log("✅ Loaded cached profile from localStorage:", parsed)
+      } catch {
+        console.warn("⚠️ Failed to parse cached profile")
+      }
+    }
+  }, [])
 
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
@@ -68,6 +83,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const userProfile = await userProfileApi.fetchUserProfile(userId)
       console.log("✅ User profile obtained:", userProfile)
+      // ✅ Cache in localStorage
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userProfile))
       return userProfile
     } catch (err) {
       console.error("❌ Failed to fetch user profile:", err)
@@ -79,13 +96,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const init = async () => {
       console.log("🚀 Auth init starting...")
       setLoading(true)
-      let checkpoints = {
-        session: false,
-        accessToken: false,
-        refreshToken: false,
-        profile: false,
-        activeFlag: false
-      }
 
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -93,20 +103,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           console.error("❌ Session error:", sessionError.message)
           await supabase.auth.signOut()
           setUser(null)
+          localStorage.removeItem(LOCAL_STORAGE_KEY)
           return
         }
 
-        if (session) {
-          checkpoints.session = true
-          if (session.access_token) checkpoints.accessToken = true
-          if (session.refresh_token) checkpoints.refreshToken = true
-          console.log("✅ Session info:", {
-            accessToken: !!session.access_token,
-            refreshToken: !!session.refresh_token,
-            userId: session.user?.id
-          })
-
-          if (session.user) {
+        if (session?.user) {
+          console.log("✅ Session found:", session.user.id)
+          try {
             const profile = await queryClient.fetchQuery({
               queryKey: queryKeys.userProfile(session.user.id),
               queryFn: () => fetchUserProfile(session.user.id),
@@ -114,35 +117,30 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               gcTime: Infinity,
             })
 
-            if (profile) checkpoints.profile = true
             if (profile?.is_active) {
-              checkpoints.activeFlag = true
               setUser(profile)
               console.log("✅ User is active and set in state")
             } else {
               console.warn("⚠️ User inactive, signing out")
               await supabase.auth.signOut()
               setUser(null)
+              localStorage.removeItem(LOCAL_STORAGE_KEY)
             }
+          } catch (err) {
+            console.error("❌ Failed to fetch profile:", err)
           }
         } else {
           console.log("ℹ️ No session found")
           await supabase.auth.signOut()
           setUser(null)
+          localStorage.removeItem(LOCAL_STORAGE_KEY)
         }
       } catch (err) {
         console.error("❌ Error during init:", err)
         await supabase.auth.signOut()
         setUser(null)
+        localStorage.removeItem(LOCAL_STORAGE_KEY)
       } finally {
-        console.log("📊 Init checkpoints:", checkpoints)
-        const obtained = Object.values(checkpoints).filter(Boolean).length
-        const total = Object.keys(checkpoints).length
-        console.log(`📊 Progress: ${obtained}/${total} info items obtained.`)
-        for (const [key, value] of Object.entries(checkpoints)) {
-          console.log(`   - ${key}: ${value ? "✅ success" : "❌ failed"}`)
-        }
-        console.log("✅ Auth init finished")
         setLoading(false)
       }
     }
@@ -167,6 +165,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             console.warn("⚠️ User inactive on state change, signing out")
             await supabase.auth.signOut()
             setUser(null)
+            localStorage.removeItem(LOCAL_STORAGE_KEY)
           }
         } catch (err) {
           console.error("❌ Failed to refresh profile on state change:", err)
@@ -176,6 +175,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) })
         }
         setUser(null)
+        localStorage.removeItem(LOCAL_STORAGE_KEY)
       }
       if (loading) setLoading(false)
     })
@@ -209,6 +209,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
 
         setUser(profile)
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(profile))
       }
     } catch (err: any) {
       console.error("❌ Sign in error:", err)
@@ -229,6 +230,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       queryClient.removeQueries({ queryKey: queryKeys.userProfile(user.id) })
     }
     setUser(null)
+    localStorage.removeItem(LOCAL_STORAGE_KEY)
     setError(null)
     try {
       await supabase.auth.signOut()
@@ -278,16 +280,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (!profile?.is_active) {
           console.warn("⚠️ User inactive on refresh, signing out")
           setUser(null)
+          localStorage.removeItem(LOCAL_STORAGE_KEY)
           await supabase.auth.signOut()
           return
         }
         setUser(profile)
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(profile))
         clearPermissionCache()
         resetInactivityTimer()
         console.log("✅ User profile refreshed")
       } else {
         console.warn("⚠️ No session user on refresh, clearing state")
         setUser(null)
+        localStorage.removeItem(LOCAL_STORAGE_KEY)
       }
     } catch (err) {
       console.error("❌ Refresh user failed:", err)
