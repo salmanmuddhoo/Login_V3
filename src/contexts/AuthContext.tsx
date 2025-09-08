@@ -1,4 +1,4 @@
-// AuthContext.tsx
+// AuthContext.tsx (debug version)
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -29,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
+    console.log("📡 Fetching profile for:", userId);
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -36,12 +37,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq("id", userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Profile fetch error:", error);
+        return;
+      }
+
+      console.log("✅ Profile fetched:", data);
       setUser(data as UserProfile);
     } catch (err) {
-      console.error("[AuthProvider] Failed to fetch profile", err);
-      // fallback: keep minimal user
-      setUser((prev) => prev ?? null);
+      console.error("🔥 Unexpected profile fetch error:", err);
     }
   };
 
@@ -51,44 +55,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initAuth = async () => {
       const { data, error } = await supabase.auth.getSession();
       if (error) {
-        console.error("[AuthProvider] getSession error:", error);
+        console.error("❌ getSession error:", error);
       }
 
       const currentSession = data?.session ?? null;
+      console.log("📦 Initial session:", currentSession);
       setSession(currentSession);
 
       if (currentSession?.user) {
-        console.log("🔍 Got session user:", currentSession.user.id);
-
-        // Set minimal user immediately
-        const minimalUser: UserProfile = {
-          id: currentSession.user.id,
-          email: currentSession.user.email ?? "",
-        };
-        setUser(minimalUser);
-
-        // Fetch extended profile in background
+        console.log("🔑 Found session user:", currentSession.user.id);
+        setUser({ id: currentSession.user.id, email: currentSession.user.email ?? "" });
         fetchProfile(currentSession.user.id);
       } else {
         setUser(null);
       }
 
-      // ✅ Now we stop blocking spinner
       setLoading(false);
     };
 
     initAuth();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      console.log("🌀 Auth state change:", event, newSession);
       setSession(newSession);
+
       if (newSession?.user) {
-        const minimalUser: UserProfile = {
-          id: newSession.user.id,
-          email: newSession.user.email ?? "",
-        };
-        setUser(minimalUser);
+        console.log("✅ Setting minimal user from auth change:", newSession.user.id);
+        setUser({ id: newSession.user.id, email: newSession.user.email ?? "" });
         fetchProfile(newSession.user.id);
       } else {
+        console.log("🚪 Signed out, clearing user");
         setUser(null);
       }
     });
