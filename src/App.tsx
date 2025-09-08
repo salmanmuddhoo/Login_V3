@@ -10,21 +10,15 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { ForcePasswordChangePage } from './pages/ForcePasswordChangePage'
 
-import { supabase } from './lib/supabase'
+// Lazy load page components for better performance
+const Dashboard = React.lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })))
+const AdminUsers = React.lazy(() => import('./pages/AdminUsers').then(module => ({ default: module.AdminUsers })))
+const AdminRoles = React.lazy(() => import('./pages/AdminRoles').then(module => ({ default: module.AdminRoles })))
+const AdminPermissions = React.lazy(() => import('./pages/AdminPermissions').then(module => ({ default: module.AdminPermissions })))
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage })))
 
-// Make supabase available in the browser console for testing
-window.supabaseTest = supabase
-
-
-// Lazy load page components
-const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
-const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })))
-const AdminUsers = React.lazy(() => import('./pages/AdminUsers').then(m => ({ default: m.AdminUsers })))
-const AdminRoles = React.lazy(() => import('./pages/AdminRoles').then(m => ({ default: m.AdminRoles })))
-const AdminPermissions = React.lazy(() => import('./pages/AdminPermissions').then(m => ({ default: m.AdminPermissions })))
-const ProfilePage = React.lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })))
-
-// Loading fallback
+// Loading fallback component
 const PageLoadingFallback = () => (
   <div className="flex items-center justify-center py-12">
     <div className="text-center">
@@ -38,75 +32,106 @@ const AppLoadingFallback = () => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center">
     <div className="text-center">
       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-      <p className="text-gray-600">Loading application...</p>
+      <p className="text-gray-600">Loading...</p>
     </div>
   </div>
 )
 
-// ROUTE LOADERS WITH LOGGING
+// Route loaders for data prefetching
 const dashboardLoader = async () => {
-  console.log('[Loader] dashboardLoader called')
   try {
+    // Prefetch dashboard data
     const [stats, activity] = await Promise.all([
-      queryClient.fetchQuery({ queryKey: queryKeys.dashboardStats(), queryFn: dashboardApi.getStats }),
-      queryClient.fetchQuery({ queryKey: queryKeys.dashboardActivity(), queryFn: dashboardApi.getRecentActivity }),
+      queryClient.fetchQuery({
+        queryKey: queryKeys.dashboardStats(),
+        queryFn: dashboardApi.getStats,
+      }),
+      queryClient.fetchQuery({
+        queryKey: queryKeys.dashboardActivity(),
+        queryFn: dashboardApi.getRecentActivity,
+      }),
     ])
-    console.log('[Loader] dashboardLoader data fetched')
+    
     return { stats, activity }
   } catch (error) {
-    console.error('[Loader] dashboardLoader error', error)
+    // Return empty data on error - components will handle loading states
     return { stats: [], activity: [] }
   }
 }
 
 const adminUsersLoader = async () => {
-  console.log('[Loader] adminUsersLoader called')
   try {
+    // Prefetch users and roles data
     const [usersData, roles] = await Promise.all([
-      queryClient.fetchQuery({ queryKey: queryKeys.adminUsers(), queryFn: adminUsersApi.getUsers }),
-      queryClient.fetchQuery({ queryKey: queryKeys.roles(), queryFn: rolesApi.getRoles }),
+      queryClient.fetchQuery({
+        queryKey: queryKeys.adminUsers(),
+        queryFn: adminUsersApi.getUsers,
+      }),
+      queryClient.fetchQuery({
+        queryKey: queryKeys.roles(),
+        queryFn: rolesApi.getRoles,
+      }),
     ])
-    console.log('[Loader] adminUsersLoader data fetched')
+    
     return { users: usersData.users, roles }
   } catch (error) {
-    console.error('[Loader] adminUsersLoader error', error)
+    // Return empty data on error - components will handle loading states
     return { users: [], roles: [] }
   }
 }
 
 const adminRolesLoader = async () => {
-  console.log('[Loader] adminRolesLoader called')
   try {
+    // Prefetch roles and permissions data
     const [roles, permissions] = await Promise.all([
-      queryClient.fetchQuery({ queryKey: queryKeys.adminRoles(), queryFn: rolesApi.getRoles }),
-      queryClient.fetchQuery({ queryKey: queryKeys.adminPermissions(), queryFn: rolesApi.getPermissions }),
+      queryClient.fetchQuery({
+        queryKey: queryKeys.adminRoles(),
+        queryFn: adminRolesApi.getRoles,
+      }),
+      queryClient.fetchQuery({
+        queryKey: queryKeys.adminPermissions(),
+        queryFn: adminPermissionsApi.getPermissions,
+      }),
     ])
-    console.log('[Loader] adminRolesLoader data fetched')
+    
     return { roles, permissions }
   } catch (error) {
-    console.error('[Loader] adminRolesLoader error', error)
     return { roles: [], permissions: [] }
   }
 }
 
 const adminPermissionsLoader = async () => {
-  console.log('[Loader] adminPermissionsLoader called')
   try {
-    const permissions = await queryClient.fetchQuery({ queryKey: queryKeys.adminPermissions(), queryFn: rolesApi.getPermissions })
-    console.log('[Loader] adminPermissionsLoader data fetched')
+    const permissions = await queryClient.fetchQuery({
+      queryKey: queryKeys.adminPermissions(),
+      queryFn: adminPermissionsApi.getPermissions,
+      staleTime: 10 * 60 * 1000, // Cache permissions for 10 minutes
+    })
+    
     return { permissions }
   } catch (error) {
-    console.error('[Loader] adminPermissionsLoader error', error)
     return { permissions: [] }
   }
 }
 
-// ROUTER
+// Router configuration with loaders
 const router = createBrowserRouter([
-  { path: '/login', element: <LoginForm /> },
-  { path: '/forgot-password', element: <ForgotPasswordPage /> },
-  { path: '/reset-password', element: <ResetPasswordPage /> },
-  { path: '/force-password-change', element: <ForcePasswordChangePage /> },
+  {
+    path: '/login',
+    element: <LoginForm />,
+  },
+  {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
+  },
+  {
+    path: '/force-password-change',
+    element: <ForcePasswordChangePage />,
+  },
   {
     path: '/',
     element: (
@@ -116,12 +141,17 @@ const router = createBrowserRouter([
     ),
     hydrateFallbackElement: <AppLoadingFallback />,
     children: [
-      { index: true, element: <Navigate to="/dashboard" replace /> },
+      {
+        index: true,
+        element: <Navigate to="/dashboard" replace />,
+      },
       {
         path: 'dashboard',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'dashboard', action: 'access' }}>
-            <Suspense fallback={<PageLoadingFallback />}><Dashboard /></Suspense>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Dashboard />
+            </Suspense>
           </ProtectedRoute>
         ),
         loader: dashboardLoader,
@@ -131,55 +161,130 @@ const router = createBrowserRouter([
         path: 'admin/dashboard',
         element: (
           <ProtectedRoute requireAdmin>
-            <Suspense fallback={<PageLoadingFallback />}><AdminDashboard /></Suspense>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminDashboard />
+            </Suspense>
           </ProtectedRoute>
         ),
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'admin/users',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'users', action: 'manage' }}>
-            <Suspense fallback={<PageLoadingFallback />}><AdminUsers /></Suspense>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminUsers />
+            </Suspense>
           </ProtectedRoute>
         ),
         loader: adminUsersLoader,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'admin/roles',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'roles', action: 'manage' }}>
-            <Suspense fallback={<PageLoadingFallback />}><AdminRoles /></Suspense>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminRoles />
+            </Suspense>
           </ProtectedRoute>
         ),
         loader: adminRolesLoader,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'admin/permissions',
         element: (
           <ProtectedRoute requiredPermission={{ resource: 'permissions', action: 'manage' }}>
-            <Suspense fallback={<PageLoadingFallback />}><AdminPermissions /></Suspense>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AdminPermissions />
+            </Suspense>
           </ProtectedRoute>
         ),
         loader: adminPermissionsLoader,
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
       {
         path: 'profile',
         element: (
           <ProtectedRoute>
-            <Suspense fallback={<PageLoadingFallback />}><ProfilePage /></Suspense>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <ProfilePage />
+            </Suspense>
           </ProtectedRoute>
         ),
+        hydrateFallbackElement: <PageLoadingFallback />,
+      },
+      {
+        path: 'reports',
+        element: (
+          <ProtectedRoute requiredPermission={{ resource: 'reports', action: 'view' }}>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-900">Reports</h2>
+                <p className="text-gray-600 mt-2">Coming soon...</p>
+              </div>
+            </Suspense>
+          </ProtectedRoute>
+        ),
+        hydrateFallbackElement: <PageLoadingFallback />,
+      },
+      {
+        path: 'transactions',
+        element: (
+          <ProtectedRoute requiredPermission={{ resource: 'transactions', action: 'create' }}>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-900">Transactions</h2>
+                <p className="text-gray-600 mt-2">Coming soon...</p>
+              </div>
+            </Suspense>
+          </ProtectedRoute>
+        ),
+        hydrateFallbackElement: <PageLoadingFallback />,
+      },
+      {
+        path: 'analytics',
+        element: (
+          <ProtectedRoute requiredPermission={{ resource: 'reports', action: 'view' }}>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-900">Analytics</h2>
+                <p className="text-gray-600 mt-2">Coming soon...</p>
+              </div>
+            </Suspense>
+          </ProtectedRoute>
+        ),
+        hydrateFallbackElement: <PageLoadingFallback />,
+      },
+      {
+        path: 'settings',
+        element: (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <div className="text-center py-12">
+              <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+              <p className="text-gray-600 mt-2">Coming soon...</p>
+            </div>
+          </Suspense>
+        ),
+        hydrateFallbackElement: <PageLoadingFallback />,
       },
     ],
   },
-  { path: '*', element: <Navigate to="/dashboard" replace /> },
-], { future: { v7_partialHydration: true } })
+  {
+    path: '*',
+    element: <Navigate to="/dashboard" replace />,
+  },
+], {
+  future: {
+    v7_partialHydration: true,
+  },
+})
 
 function App() {
-  console.log('[App] Mounting application...')
   return (
     <AuthProvider>
-      <RouterProvider router={router} fallbackElement={<AppLoadingFallback />} />
+      <RouterProvider router={router} />
     </AuthProvider>
   )
 }

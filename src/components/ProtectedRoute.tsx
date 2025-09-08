@@ -10,19 +10,17 @@ interface ProtectedRouteProps {
   redirectTo?: string
 }
 
-export function ProtectedRoute({
-  children,
-  requireAdmin = false,
+export function ProtectedRoute({ 
+  children, 
+  requireAdmin = false, 
   requiredPermission,
   redirectTo = '/login'
 }: ProtectedRouteProps) {
-  const { user, loading, initializing } = useAuth()
+  const { user, loading } = useAuth()
   const location = useLocation()
 
-  console.log('[ProtectedRoute] loading:', loading, 'user:', user, 'initializing:', initializing, 'path:', location.pathname)
-
-  if ((loading && user) || initializing) {
-    console.log('[ProtectedRoute] Showing spinner...')
+  // Only show loading spinner if we're actually loading (no cached data available)
+  if (loading && !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -34,10 +32,10 @@ export function ProtectedRoute({
   }
 
   if (!user) {
-    console.log('[ProtectedRoute] No user, redirecting to login')
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
+  // Check if user needs to change their password
   if (user.needs_password_reset && location.pathname !== '/force-password-change') {
     return <Navigate to="/force-password-change" replace />
   }
